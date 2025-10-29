@@ -1,0 +1,444 @@
+/**
+ * Kiyoh WooCommerce Admin Styles
+ */
+
+.kiyoh-admin-settings {
+    max-width: 1000px;
+}
+
+.kiyoh-admin-settings .form-table th {
+    width: 220px;
+    padding-left: 0;
+}
+
+.kiyoh-admin-settings .form-table td {
+    padding-left: 20px;
+}
+
+.kiyoh-admin-settings .description {
+    font-style: italic;
+    color: #666;
+    margin-top: 5px;
+}
+
+/* Tab Navigation */
+.nav-tab-wrapper {
+    margin-bottom: 20px;
+    border-bottom: 1px solid #ccd0d4;
+}
+
+.nav-tab {
+    position: relative;
+    display: inline-block;
+    padding: 8px 12px;
+    margin: 0;
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-bottom: none;
+    background: #f1f1f1;
+    color: #555;
+    font-weight: 600;
+}
+
+.nav-tab:hover {
+    background: #fafafa;
+    color: #444;
+}
+
+.nav-tab-active {
+    background: #fff;
+    border-color: #ccd0d4;
+    border-bottom: 1px solid #fff;
+    color: #000;
+    margin-bottom: -1px;
+}
+
+/* Tab Content */
+.tab-content {
+    background: #fff;
+    padding: 20px;
+    border: 1px solid #ccd0d4;
+    border-top: none;
+    margin-top: -1px;
+}
+
+.tab-panel {
+    display: none;
+}
+
+.tab-panel.active {
+    display: block;
+}
+
+/* Submit Section */
+.submit-section {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #e1e1e1;
+}
+
+/* Form Elements */
+.kiyoh-admin-settings select[multiple] {
+    height: auto;
+    min-height: 120px;
+}
+
+.kiyoh-admin-settings textarea {
+    font-family: monospace;
+}
+
+/* Status Indicators */
+.kiyoh-status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.kiyoh-status-indicator.connected {
+    background-color: #46b450;
+}
+
+.kiyoh-status-indicator.disconnected {
+    background-color: #dc3232;
+}
+
+.kiyoh-status-indicator.warning {
+    background-color: #ffb900;
+}
+
+/* Tools Section */
+.kiyoh-tools-section {
+    margin: 20px 0;
+}
+
+.kiyoh-tool-item {
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 15px;
+}
+
+.kiyoh-tool-item h4 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.kiyoh-tool-item .button {
+    margin-right: 10px;
+}
+
+/* Progress Indicators */
+.kiyoh-progress {
+    background: #f0f0f0;
+    border-radius: 3px;
+    height: 20px;
+    margin: 10px 0;
+    overflow: hidden;
+}
+
+.kiyoh-progress-bar {
+    background: #0073aa;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+/* Notices */
+.kiyoh-notice {
+    padding: 12px;
+    margin: 15px 0;
+    border-left: 4px solid #0073aa;
+    background: #fff;
+    box-shadow: 0 1px 1px rgba(0,0,0,.04);
+}
+
+.kiyoh-notice.error {
+    border-left-color: #dc3232;
+}
+
+.kiyoh-notice.warning {
+    border-left-color: #ffb900;
+}
+
+.kiyoh-notice.success {
+    border-left-color: #46b450;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 782px) {
+    .kiyoh-admin-settings .form-table th,
+    .kiyoh-admin-settings .form-table td {
+        display: block;
+        width: 100%;
+        padding: 10px 0;
+    }
+    
+    .kiyoh-admin-settings .form-table th {
+        border-bottom: none;
+    }
+    
+    .nav-tab {
+        display: block;
+        margin-bottom: 0;
+        border-bottom: 1px solid #ccd0d4;
+    }
+    
+    .nav-tab-active {
+        margin-bottom: 0;
+    }
+}
+
+/* Field Groups */
+.kiyoh-field-group {
+    border: 1px solid #e1e1e1;
+    padding: 15px;
+    margin: 15px 0;
+    background: #fafafa;
+}
+
+.kiyoh-field-group h4 {
+    margin-top: 0;
+    color: #23282d;
+}
+
+/* Help Text */
+.kiyoh-help-text {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-left: 4px solid #72aee6;
+    padding: 12px;
+    margin: 15px 0;
+}
+
+.kiyoh-help-text h4 {
+    margin-top: 0;
+}
+
+/* Loading States */
+.kiyoh-loading {
+    opacity: 0.6;
+    pointer-events: none;
+}
+
+.kiyoh-spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f3f3f3;
+    border-top: 2px solid #0073aa;
+    border-radius: 50%;
+    animation: kiyoh-spin 1s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes kiyoh-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}/* Prod
+uct Sync Specific Styles */
+.kiyoh-sync-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px;
+    margin: 20px 0;
+}
+
+.kiyoh-sync-stat {
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    border-radius: 4px;
+    padding: 15px;
+    text-align: center;
+}
+
+.kiyoh-sync-stat .stat-number {
+    font-size: 24px;
+    font-weight: bold;
+    color: #0073aa;
+    display: block;
+}
+
+.kiyoh-sync-stat .stat-label {
+    font-size: 12px;
+    color: #666;
+    text-transform: uppercase;
+    margin-top: 5px;
+}
+
+.kiyoh-bulk-sync-progress {
+    margin: 20px 0;
+    padding: 15px;
+    background: #f9f9f9;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    display: none;
+}
+
+.kiyoh-bulk-sync-progress.active {
+    display: block;
+}
+
+.kiyoh-progress-text {
+    margin-bottom: 10px;
+    font-weight: 500;
+}
+
+.kiyoh-api-details {
+    background: #f8f8f8;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 10px;
+    margin-top: 10px;
+    font-family: monospace;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+.kiyoh-api-details pre {
+    margin: 0;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+}
+
+/* Exclusion Fields */
+.kiyoh-exclusion-help {
+    background: #fff3cd;
+    border: 1px solid #ffeaa7;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 10px 0;
+    font-size: 13px;
+}
+
+.kiyoh-exclusion-help strong {
+    color: #856404;
+}
+
+/* Button States */
+.button.kiyoh-processing {
+    position: relative;
+    color: transparent !important;
+}
+
+.button.kiyoh-processing::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: kiyoh-spin 1s linear infinite;
+}
+
+/* Error States */
+.kiyoh-error-details {
+    background: #ffeaea;
+    border: 1px solid #f5c6cb;
+    border-radius: 4px;
+    padding: 10px;
+    margin: 10px 0;
+    font-size: 13px;
+    color: #721c24;
+}
+
+.kiyoh-error-details summary {
+    cursor: pointer;
+    font-weight: 500;
+    margin-bottom: 10px;
+}
+
+.kiyoh-error-details pre {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 3px;
+    padding: 8px;
+    margin: 8px 0 0 0;
+    font-size: 11px;
+    overflow-x: auto;
+}
+/* Product sync results styling */
+#product-sync-results {
+    margin-top: 20px;
+}
+
+#product-sync-results .notice {
+    margin: 10px 0;
+}
+
+#product-sync-results pre {
+    background: #f1f1f1;
+    padding: 10px;
+    border-radius: 3px;
+    font-size: 12px;
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Test results styling */
+.kiyoh-test-results {
+    margin-top: 20px;
+}
+
+.kiyoh-test-results .notice h3 {
+    margin-top: 0;
+    margin-bottom: 10px;
+}
+
+.kiyoh-test-results .notice p {
+    margin: 5px 0;
+}
+
+.kiyoh-test-details {
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-radius: 4px;
+    padding: 15px;
+    margin-top: 15px;
+}
+
+.kiyoh-test-details h4 {
+    margin-top: 0;
+    margin-bottom: 15px;
+    color: #23282d;
+}
+
+.kiyoh-test-details h5 {
+    margin: 15px 0 10px 0;
+    color: #1d2327;
+    font-size: 14px;
+}
+
+.kiyoh-test-list {
+    margin: 0 0 15px 20px;
+    list-style: none;
+}
+
+.kiyoh-test-list li {
+    margin: 5px 0;
+    padding: 3px 0;
+    font-size: 13px;
+}
+
+.kiyoh-test-list .test-status {
+    font-weight: bold;
+    margin-right: 8px;
+}
+
+.kiyoh-test-list .test-pass .test-status {
+    color: #00a32a;
+}
+
+.kiyoh-test-list .test-fail .test-status {
+    color: #d63638;
+}
+
+.kiyoh-test-list .test-message {
+    color: #50575e;
+}
