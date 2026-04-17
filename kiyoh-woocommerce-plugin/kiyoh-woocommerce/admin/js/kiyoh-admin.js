@@ -205,7 +205,7 @@
                         if (response.data.stats) {
                             var stats = response.data.stats;
                             if (stats.averageRating) {
-                                message += ' (Average Rating: ' + stats.averageRating + ', Total Reviews: ' + (stats.numberOfReviews || 0) + ')';
+                                message += ' (Average Rating: ' + stats.averageRating + ', Total Reviews: ' + (stats.numberReviews || 0) + ')';
                             }
                         }
                         KiyohAdmin.showApiTestResult('success', message);

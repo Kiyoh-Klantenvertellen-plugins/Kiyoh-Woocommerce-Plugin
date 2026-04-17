@@ -179,12 +179,6 @@ class Kiyoh_Product_Sync_Manager {
             return false;
         }
 
-        // Only sync published products
-        if ($product->get_status() !== 'publish') {
-            error_log("Kiyoh Product Sync: Product {$product_id} status '{$product->get_status()}' is not published - skipping");
-            return false;
-        }
-
         error_log("Kiyoh Product Sync: Product {$product_id} (SKU: '{$sku}', Name: '{$name}') passed validation - proceeding with sync");
         return true;
     }
@@ -239,25 +233,25 @@ class Kiyoh_Product_Sync_Manager {
             'product_name' => (string) $product_name,
             'source_url' => $product_url,
             'image_url' => $image_url,
-            'active' => true
+            'active' => ($product->get_status() === 'publish')
         );
 
         // Only add optional fields if they exist and are not empty
         if (!empty($brand)) {
-            $data['cluster_code'] = (string) $brand;
+            $data['brand_name'] = (string) $brand;
         }
         
         $sku = $product->get_sku();
-        if (!empty($sku) && $sku !== $product_code) {
-            $data['skus'] = array((string) $sku);
+        if (!empty($sku)) {
+            $data['skus'] = (string) $sku;
         }
         
-        if (!empty($gtin) && preg_match('/^\d{8,14}$/', $gtin)) {
-            $data['gtins'] = array((string) $gtin);
+        if (!empty($gtin)) {
+            $data['gtins'] = (string) $gtin;
         }
         
         if (!empty($mpn)) {
-            $data['mpns'] = array((string) $mpn);
+            $data['mpns'] = (string) $mpn;
         }
 
         return $data;
@@ -270,33 +264,42 @@ class Kiyoh_Product_Sync_Manager {
     }
 
     private function get_product_brand($product) {
-        // Try to get brand from various sources
-        $brand = '';
-
-        // Check for brand attribute
+        // Check for brand product attribute (Attributes tab)
         $brand_attribute = $product->get_attribute('brand');
         if (!empty($brand_attribute)) {
             return $brand_attribute;
         }
 
-        // Check for brand taxonomy
-        $brand_terms = get_the_terms($product->get_id(), 'product_brand');
-        if (!empty($brand_terms) && !is_wp_error($brand_terms)) {
-            return $brand_terms[0]->name;
+        // Check for brand taxonomy (WooCommerce Brands / Perfect Brands plugins)
+        $brand_taxonomies = array('product_brand', 'pwb-brand', 'yith_product_brand');
+        foreach ($brand_taxonomies as $taxonomy) {
+            $brand_terms = get_the_terms($product->get_id(), $taxonomy);
+            if (!empty($brand_terms) && !is_wp_error($brand_terms)) {
+                return $brand_terms[0]->name;
+            }
         }
 
-        // Check for brand meta field
-        $brand_meta = get_post_meta($product->get_id(), '_brand', true);
-        if (!empty($brand_meta)) {
-            return $brand_meta;
+        // Check for brand in meta fields
+        $brand_fields = array('_brand', 'brand', '_manufacturer', 'manufacturer');
+        foreach ($brand_fields as $field) {
+            $brand_meta = get_post_meta($product->get_id(), $field, true);
+            if (!empty($brand_meta)) {
+                return $brand_meta;
+            }
         }
 
-        return $brand;
+        return '';
     }
 
     private function get_product_gtin($product) {
+        // Check WooCommerce built-in GTIN field first (Product → Inventory → "GTIN, UPC, EAN, or ISBN")
+        $global_unique_id = $product->get_global_unique_id();
+        if (!empty($global_unique_id)) {
+            return $global_unique_id;
+        }
+
         // Check for GTIN in various meta fields
-        $gtin_fields = array('_gtin', '_gtin14', '_gtin13', '_gtin12', '_gtin8', '_ean', '_upc');
+        $gtin_fields = array('_global_unique_id', '_gtin', '_gtin14', '_gtin13', '_gtin12', '_gtin8', '_ean', '_upc');
         
         foreach ($gtin_fields as $field) {
             $gtin = get_post_meta($product->get_id(), $field, true);

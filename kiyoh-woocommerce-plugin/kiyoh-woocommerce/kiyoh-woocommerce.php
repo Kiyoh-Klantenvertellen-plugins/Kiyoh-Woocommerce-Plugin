@@ -3,7 +3,7 @@
  * Plugin Name: Kiyoh WooCommerce Integration
  * Plugin URI: https://www.kiyoh.com/
  * Description: Complete WooCommerce integration with Kiyoh/Klantenvertellen review platforms. Sync products, send automated review invitations, and display reviews on your store.
- * Version: 1.0.0
+ * Version: 1.1.0
  * Author: Kiyoh
  * Author URI: https://www.kiyoh.com/
  * License: GPL v2 or later
@@ -25,7 +25,7 @@ if (!defined('WPINC')) {
 /**
  * Currently plugin version.
  */
-define('KIYOH_WOOCOMMERCE_VERSION', '1.0.0');
+define('KIYOH_WOOCOMMERCE_VERSION', '1.1.0');
 define('KIYOH_WOOCOMMERCE_PLUGIN_FILE', __FILE__);
 define('KIYOH_WOOCOMMERCE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('KIYOH_WOOCOMMERCE_PLUGIN_URL', plugin_dir_url(__FILE__));

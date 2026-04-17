@@ -35,24 +35,24 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
             'product_name' => (string) $product_data['product_name'],
             'source_url' => $product_data['source_url'],
             'image_url' => $product_data['image_url'],
-            'active' => true
+            'active' => isset($product_data['active']) ? (bool) $product_data['active'] : true
         );
         
         // Only add optional fields if they exist and are not empty
-        if (!empty($product_data['cluster_code'])) {
-            $payload['cluster_code'] = (string) $product_data['cluster_code'];
+        if (!empty($product_data['brand_name'])) {
+            $payload['brand_name'] = (string) $product_data['brand_name'];
         }
         
-        if (!empty($product_data['skus']) && is_array($product_data['skus'])) {
-            $payload['skus'] = $product_data['skus'];
+        if (!empty($product_data['skus'])) {
+            $payload['skus'] = (string) $product_data['skus'];
         }
         
-        if (!empty($product_data['gtins']) && is_array($product_data['gtins'])) {
-            $payload['gtins'] = $product_data['gtins'];
+        if (!empty($product_data['gtins'])) {
+            $payload['gtins'] = (string) $product_data['gtins'];
         }
         
-        if (!empty($product_data['mpns']) && is_array($product_data['mpns'])) {
-            $payload['mpns'] = $product_data['mpns'];
+        if (!empty($product_data['mpns'])) {
+            $payload['mpns'] = (string) $product_data['mpns'];
         }
         
         $response = $this->make_request('PUT', $endpoint, $payload);
@@ -241,11 +241,15 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     }
     
     private function get_timeout($endpoint) {
-        if (strpos($endpoint, '/invite/') !== false) {
-            return 2;
+        if (strpos($endpoint, '/bulk') !== false) {
+            return 30;
         }
         
-        return 1;
+        if (strpos($endpoint, '/invite/') !== false) {
+            return 10;
+        }
+        
+        return 5;
     }
     
     private function log_error($message, $context = array()) {

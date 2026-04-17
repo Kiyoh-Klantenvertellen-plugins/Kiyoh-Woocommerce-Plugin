@@ -94,6 +94,11 @@ class Kiyoh_Invitation_Manager {
         $invitation_type = $this->get_invitation_type();
         $product_codes = $this->extract_product_codes_from_order($order);
 
+        // Sync products before sending invitation to prevent PRODUCT_NOT_FOUND errors
+        if (!empty($product_codes) && $invitation_type !== 'shop_only') {
+            $this->sync_order_products_before_invitation($order, $product_codes);
+        }
+
         try {
             if ($invitation_type === 'product_only') {
                 if (!empty($product_codes)) {
@@ -398,6 +403,15 @@ class Kiyoh_Invitation_Manager {
     }
 
 
+
+    private function sync_order_products_before_invitation($order, $product_codes) {
+        if (empty($this->settings['product_sync']['auto_sync'])) {
+            return;
+        }
+
+        error_log("Kiyoh Invitation: Syncing order products before invitation for order {$order->get_id()}");
+        $this->sync_order_products($order);
+    }
 
     private function should_sync_products_for_error($error_code) {
         $product_sync_errors = array(

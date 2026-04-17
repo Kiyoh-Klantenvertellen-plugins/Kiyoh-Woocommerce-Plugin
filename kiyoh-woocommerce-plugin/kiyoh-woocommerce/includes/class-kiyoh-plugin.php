@@ -51,7 +51,7 @@ class Kiyoh_Plugin {
         if (defined('KIYOH_WOOCOMMERCE_VERSION')) {
             $this->version = KIYOH_WOOCOMMERCE_VERSION;
         } else {
-            $this->version = '1.0.0';
+            $this->version = '1.1.0';
         }
         $this->plugin_name = 'kiyoh-woocommerce';
 
