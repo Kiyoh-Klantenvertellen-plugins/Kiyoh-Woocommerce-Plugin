@@ -61,12 +61,24 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     
     public function sync_products_bulk($products_data) {
         $endpoint = '/v1/location/product/external/bulk';
-        
+
+        // The bulk endpoint validates location_id on BOTH the envelope AND every
+        // product object. Missing per-product location_id triggers a
+        // VALIDATION_ERROR (REQUIRED_FIELD) that rejects the entire batch, so we
+        // must ensure each product carries it. (Verified against the live API.)
+        $products = array();
+        foreach ($products_data as $product) {
+            if (!isset($product['location_id']) || $product['location_id'] === '') {
+                $product['location_id'] = (string) $this->location_id;
+            }
+            $products[] = $product;
+        }
+
         $payload = array(
             'location_id' => (string) $this->location_id,
-            'products' => $products_data
+            'products' => $products
         );
-        
+
         $response = $this->make_request('PUT', $endpoint, $payload);
         return new Kiyoh_Api_Response($response);
     }

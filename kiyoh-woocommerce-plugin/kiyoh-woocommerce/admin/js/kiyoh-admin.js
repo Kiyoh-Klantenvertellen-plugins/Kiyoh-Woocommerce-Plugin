@@ -165,9 +165,22 @@
                 },
                 success: function (response) {
                     if (response.success) {
-                        KiyohAdmin.showProductSyncResult('success', response.data.message);
+                        var payload = response.data || {};
+                        var hasErrors = payload.has_errors && payload.error_messages && payload.error_messages.length;
+                        // If any batch failed, show a warning/error notice WITH the
+                        // detailed API messages so the cause is visible in the panel.
+                        KiyohAdmin.showProductSyncResult(
+                            hasErrors ? 'error' : 'success',
+                            payload.message,
+                            hasErrors ? payload.error_messages : null
+                        );
                     } else {
-                        KiyohAdmin.showProductSyncResult('error', response.data.message || kiyoh_admin_ajax.strings.error);
+                        var errData = response.data || {};
+                        KiyohAdmin.showProductSyncResult(
+                            'error',
+                            errData.message || kiyoh_admin_ajax.strings.error,
+                            errData.error_messages || null
+                        );
                     }
                 },
                 error: function () {
@@ -268,16 +281,35 @@
             }, 5000);
         },
 
-        showProductSyncResult: function (type, message) {
-            var noticeClass = 'notice-' + type;
-            var $result = $('<div class="notice ' + noticeClass + '"><p>' + message + '</p></div>');
+        // Escape user/API-provided text before injecting into the DOM.
+        escapeHtml: function (str) {
+            return $('<div>').text(str == null ? '' : String(str)).html();
+        },
 
+        showProductSyncResult: function (type, message, errorMessages) {
+            var noticeClass = 'notice-' + type;
+            var html = '<p>' + KiyohAdmin.escapeHtml(message) + '</p>';
+
+            // When the API returned detailed error(s), list them verbatim so the
+            // merchant can see exactly why the sync failed (validation, auth, etc.).
+            if (errorMessages && errorMessages.length) {
+                html += '<p><strong>' + KiyohAdmin.escapeHtml('Details:') + '</strong></p><ul style="margin-left:18px;list-style:disc;">';
+                for (var i = 0; i < errorMessages.length; i++) {
+                    html += '<li>' + KiyohAdmin.escapeHtml(errorMessages[i]) + '</li>';
+                }
+                html += '</ul>';
+            }
+
+            var $result = $('<div class="notice ' + noticeClass + '">' + html + '</div>');
             $('#product-sync-results').html($result);
 
-            // Auto-dismiss after 5 seconds
-            setTimeout(function () {
-                $result.fadeOut();
-            }, 5000);
+            // Keep error notices on screen so they can be read/copied; only
+            // auto-dismiss success notices.
+            if (type === 'success' && !(errorMessages && errorMessages.length)) {
+                setTimeout(function () {
+                    $result.fadeOut();
+                }, 5000);
+            }
         },
 
         showApiTestResult: function (type, message) {

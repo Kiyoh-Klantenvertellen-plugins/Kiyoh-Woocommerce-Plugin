@@ -557,9 +557,18 @@ class Kiyoh_Admin {
             $results['total']
         );
 
+        // Collect verbose, de-duplicated error details for the admin panel so a
+        // failed sync explains WHY (e.g. an API validation or auth error) instead
+        // of only showing an error count.
+        $error_messages = isset($results['error_messages']) && is_array($results['error_messages'])
+            ? array_values(array_unique($results['error_messages']))
+            : array();
+
         wp_send_json_success(array(
-            'message' => $message,
-            'data' => $results
+            'message'        => $message,
+            'has_errors'     => ($results['errors'] > 0),
+            'error_messages' => $error_messages,
+            'data'           => $results
         ));
     }
 

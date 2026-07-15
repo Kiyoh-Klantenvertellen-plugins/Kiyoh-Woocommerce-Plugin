@@ -79,7 +79,8 @@ class Kiyoh_Product_Sync_Manager {
             'total' => count($products),
             'synced' => 0,
             'errors' => 0,
-            'skipped' => 0
+            'skipped' => 0,
+            'error_messages' => array()
         );
 
         if (empty($products)) {
@@ -89,6 +90,7 @@ class Kiyoh_Product_Sync_Manager {
         $api_client = $this->get_api_client();
         if (!$api_client) {
             $results['errors'] = count($products);
+            $results['error_messages'][] = __('API client could not be initialised. Check that the API key, Location ID and platform are configured correctly under the General tab.', 'kiyoh-woocommerce');
             return $results;
         }
 
@@ -128,10 +130,29 @@ class Kiyoh_Product_Sync_Manager {
                         }
                     } else {
                         $results['errors'] += count($batch_data);
-                        
+
+                        // Build a verbose, admin-friendly error message.
+                        $error_text  = $response->get_error();
+                        $error_code  = $response->get_error_code();
+                        $http_code   = $response->get_response_code();
+
+                        $detail = sprintf(
+                            /* translators: 1: number of products in the failed batch, 2: API error message */
+                            __('Batch of %1$d product(s) failed: %2$s', 'kiyoh-woocommerce'),
+                            count($batch_data),
+                            $error_text ? $error_text : __('Unknown API error', 'kiyoh-woocommerce')
+                        );
+                        if ($error_code) {
+                            $detail .= ' [' . $error_code . ']';
+                        }
+                        if ($http_code) {
+                            $detail .= ' (HTTP ' . $http_code . ')';
+                        }
+                        $results['error_messages'][] = $detail;
+
                         // Log error for batch
-                        error_log('Kiyoh Bulk Sync Error: ' . $response->get_error());
-                        
+                        error_log('Kiyoh Bulk Sync Error: ' . $detail);
+
                         // Update sync status with error for all products in batch
                         foreach ($batch_product_ids as $product_id) {
                             $this->update_sync_status($product_id, $response);
@@ -139,6 +160,11 @@ class Kiyoh_Product_Sync_Manager {
                     }
                 } catch (Exception $e) {
                     $results['errors'] += count($batch_data);
+                    $results['error_messages'][] = sprintf(
+                        /* translators: %s: PHP exception message */
+                        __('Batch failed with exception: %s', 'kiyoh-woocommerce'),
+                        $e->getMessage()
+                    );
                     error_log('Kiyoh Bulk Sync Exception: ' . $e->getMessage());
                 }
             }
