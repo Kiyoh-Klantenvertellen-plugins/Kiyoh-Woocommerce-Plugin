@@ -267,12 +267,23 @@ class Kiyoh_Invitation_Manager {
 
                     // Use the actual purchased product SKU from the order item, not the loaded product
                     // This ensures we get the specific variant that was purchased
-                    $product_code = $item->get_meta('_sku') ?: $product->get_sku();
+                    $raw_sku = $item->get_meta('_sku') ?: $product->get_sku();
+                    if (!$raw_sku) {
+                        continue;
+                    }
+
+                    // The invitation must reference the product by the SAME
+                    // product_code that Product Sync registered in Kiyoh. That code
+                    // is a sanitised/length-capped derivation of the SKU (Kiyoh
+                    // limits product_code to <50 chars), NOT the raw SKU. Using the
+                    // raw SKU here would cause PRODUCT_NOT_FOUND for any product
+                    // whose SKU was sanitised or truncated during sync.
+                    $product_code = Kiyoh_Product_Sync_Manager::sanitize_product_code($raw_sku);
                     if (!$product_code) {
                         continue;
                     }
 
-                    // Check for duplicates
+                    // Check for duplicates (compare on the derived code).
                     $is_duplicate = false;
                     foreach ($valid_products as $valid_product) {
                         if ($valid_product['sku'] === $product_code) {

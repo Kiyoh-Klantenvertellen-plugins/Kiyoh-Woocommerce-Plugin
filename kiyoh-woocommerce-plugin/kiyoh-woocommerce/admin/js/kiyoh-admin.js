@@ -295,7 +295,9 @@
             if (errorMessages && errorMessages.length) {
                 html += '<p><strong>' + KiyohAdmin.escapeHtml('Details:') + '</strong></p><ul style="margin-left:18px;list-style:disc;">';
                 for (var i = 0; i < errorMessages.length; i++) {
-                    html += '<li>' + KiyohAdmin.escapeHtml(errorMessages[i]) + '</li>';
+                    // Raw API error dumps can be long JSON strings; render them in a
+                    // monospaced, wrapping block so nothing is truncated or hidden.
+                    html += '<li><code style="white-space:pre-wrap;word-break:break-all;display:block;">' + KiyohAdmin.escapeHtml(errorMessages[i]) + '</code></li>';
                 }
                 html += '</ul>';
             }

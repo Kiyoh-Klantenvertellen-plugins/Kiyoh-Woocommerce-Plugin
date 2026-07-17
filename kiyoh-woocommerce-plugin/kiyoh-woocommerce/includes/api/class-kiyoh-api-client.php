@@ -221,20 +221,23 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
             $error_data = json_decode($response_body, true);
             $error_message = isset($error_data['message']) ? $error_data['message'] : 'API request failed';
             $error_code = 'api_error';
-            
-            // Parse detailed error structure to extract specific error codes
+
+            // Capture the full detailedError array (not just the first entry) so
+            // the real cause behind a generic 500 (e.g. INVALID_HASH) is not lost.
+            $detailed_errors = array();
             if (isset($error_data['detailedError']) && is_array($error_data['detailedError'])) {
+                $detailed_errors = $error_data['detailedError'];
                 foreach ($error_data['detailedError'] as $detailed_error) {
                     if (isset($detailed_error['errorCode'])) {
                         $error_code = $detailed_error['errorCode'];
                         if (isset($detailed_error['message'])) {
                             $error_message = $detailed_error['message'];
                         }
-                        break; // Use the first detailed error code
+                        break; // Use the first detailed error code as the primary code
                     }
                 }
             }
-            
+
             $this->log_error('API Error: ' . $error_message, array(
                 'url' => $url,
                 'method' => $method,
@@ -242,12 +245,14 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
                 'response_body' => $response_body,
                 'request_data' => $data
             ));
-            
+
             return array(
                 'success' => false,
                 'error' => $error_message,
                 'error_code' => $error_code,
-                'response_code' => $response_code
+                'response_code' => $response_code,
+                'detailed_errors' => $detailed_errors,
+                'raw_body' => $response_body
             );
         }
     }

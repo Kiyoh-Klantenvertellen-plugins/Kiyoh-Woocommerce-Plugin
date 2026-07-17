@@ -7,6 +7,8 @@ class Kiyoh_Api_Response {
     private $error;
     private $error_code;
     private $response_code;
+    private $detailed_errors;
+    private $raw_body;
     
     public function __construct($response_data) {
         $this->success = isset($response_data['success']) ? $response_data['success'] : false;
@@ -14,6 +16,8 @@ class Kiyoh_Api_Response {
         $this->error = isset($response_data['error']) ? $response_data['error'] : null;
         $this->error_code = isset($response_data['error_code']) ? $response_data['error_code'] : null;
         $this->response_code = isset($response_data['response_code']) ? $response_data['response_code'] : null;
+        $this->detailed_errors = isset($response_data['detailed_errors']) ? $response_data['detailed_errors'] : array();
+        $this->raw_body = isset($response_data['raw_body']) ? $response_data['raw_body'] : null;
     }
     
     public function is_success() {
@@ -34,6 +38,14 @@ class Kiyoh_Api_Response {
     
     public function get_response_code() {
         return $this->response_code;
+    }
+    
+    public function get_detailed_errors() {
+        return $this->detailed_errors;
+    }
+    
+    public function get_raw_body() {
+        return $this->raw_body;
     }
     
     public function is_retryable() {

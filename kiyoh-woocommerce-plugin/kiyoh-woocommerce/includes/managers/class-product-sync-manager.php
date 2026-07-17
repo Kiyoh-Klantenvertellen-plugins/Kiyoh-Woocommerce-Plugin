@@ -2,6 +2,12 @@
 
 class Kiyoh_Product_Sync_Manager {
 
+    // Kiyoh requires product_code under 50 characters, so we cap at 49.
+    const MAX_PRODUCT_CODE_LENGTH = 49;
+
+    // Number of hash characters appended when a code has to be truncated.
+    const PRODUCT_CODE_HASH_LENGTH = 8;
+
     private $api_client;
     private $settings;
 
@@ -131,27 +137,38 @@ class Kiyoh_Product_Sync_Manager {
                     } else {
                         $results['errors'] += count($batch_data);
 
-                        // Build a verbose, admin-friendly error message.
-                        $error_text  = $response->get_error();
-                        $error_code  = $response->get_error_code();
-                        $http_code   = $response->get_response_code();
+                        // Surface the full error response so the real cause is never hidden.
+                        $http_code       = $response->get_response_code();
+                        $detailed_errors = $response->get_detailed_errors();
+                        $raw_body        = $response->get_raw_body();
 
                         $detail = sprintf(
-                            /* translators: 1: number of products in the failed batch, 2: API error message */
-                            __('Batch of %1$d product(s) failed: %2$s', 'kiyoh-woocommerce'),
+                            /* translators: 1: number of products in the failed batch, 2: HTTP status code */
+                            __('Batch of %1$d product(s) failed (HTTP %2$s)', 'kiyoh-woocommerce'),
                             count($batch_data),
-                            $error_text ? $error_text : __('Unknown API error', 'kiyoh-woocommerce')
+                            $http_code ? $http_code : '?'
                         );
-                        if ($error_code) {
-                            $detail .= ' [' . $error_code . ']';
+
+                        if (!empty($detailed_errors) && is_array($detailed_errors)) {
+                            $detail .= ' | detailedError: ' . wp_json_encode($detailed_errors);
                         }
-                        if ($http_code) {
-                            $detail .= ' (HTTP ' . $http_code . ')';
+
+                        // Always include the raw response body so nothing is hidden.
+                        if (!empty($raw_body)) {
+                            $detail .= ' | raw: ' . $raw_body;
+                        } elseif ($response->get_error()) {
+                            $detail .= ' | ' . $response->get_error();
                         }
+
                         $results['error_messages'][] = $detail;
 
-                        // Log error for batch
+                        // Log full error for batch
                         error_log('Kiyoh Bulk Sync Error: ' . $detail);
+
+                        // Opt-in batch bisection to pinpoint the offending product (see KIYOH_DIAGNOSE_BATCH).
+                        if (defined('KIYOH_DIAGNOSE_BATCH') && KIYOH_DIAGNOSE_BATCH) {
+                            $this->diagnose_failing_batch($api_client, $batch_data);
+                        }
 
                         // Update sync status with error for all products in batch
                         foreach ($batch_product_ids as $product_id) {
@@ -174,6 +191,51 @@ class Kiyoh_Product_Sync_Manager {
         }
 
         return $results;
+    }
+
+    // Bisects a failing batch to isolate and log the exact offending product(s). Opt-in via KIYOH_DIAGNOSE_BATCH.
+    private function diagnose_failing_batch($api_client, $products, $depth = 0) {
+        $count = count($products);
+
+        if ($count === 0) {
+            return;
+        }
+
+        // Base case: a single product. Re-send it alone and log the verdict.
+        if ($count === 1) {
+            sleep(1);
+            $response = $api_client->sync_products_bulk($products);
+            $payload  = wp_json_encode($products[0]);
+            if ($response->is_success()) {
+                error_log('Kiyoh Diagnose: product SYNCS OK alone: ' . $payload);
+            } else {
+                error_log(sprintf(
+                    'Kiyoh Diagnose: OFFENDING PRODUCT (HTTP %s, %s): %s',
+                    $response->get_response_code() ?: '?',
+                    $response->get_error_code() ?: 'error',
+                    $payload
+                ));
+            }
+            return;
+        }
+
+        // Split in half and test each side; recurse only into halves that fail.
+        $half   = (int) floor($count / 2);
+        $first  = array_slice($products, 0, $half);
+        $second = array_slice($products, $half);
+
+        foreach (array($first, $second) as $subset) {
+            sleep(1);
+            $response = $api_client->sync_products_bulk($subset);
+            if (!$response->is_success()) {
+                error_log(sprintf(
+                    'Kiyoh Diagnose: sub-batch of %d still fails (HTTP %s) - bisecting further',
+                    count($subset),
+                    $response->get_response_code() ?: '?'
+                ));
+                $this->diagnose_failing_batch($api_client, $subset, $depth + 1);
+            }
+        }
     }
 
     private function should_sync_product($product_id) {
@@ -216,15 +278,26 @@ class Kiyoh_Product_Sync_Manager {
         }
 
         // Get SKU directly - don't use fallback product ID like Magento
-        $product_code = $product->get_sku();
+        $raw_product_code = $product->get_sku();
         $product_name = $product->get_name();
-        
+
         // Both SKU and name are required - no fallbacks
-        if (!$product_code || !$product_name || trim($product_code) === '' || trim($product_name) === '') {
-            error_log("Kiyoh Product Sync: Product {$product_id} missing required SKU ('{$product_code}') or name ('{$product_name}') - skipping sync");
+        if (!$raw_product_code || !$product_name || trim($raw_product_code) === '' || trim($product_name) === '') {
+            error_log("Kiyoh Product Sync: Product {$product_id} missing required SKU ('{$raw_product_code}') or name ('{$product_name}') - skipping sync");
             return false;
         }
-        
+
+        // Sanitise the SKU into a safe, length-capped product_code (see sanitize_product_code()).
+        $product_code = $this->sanitize_product_code($raw_product_code);
+        if ($product_code === '') {
+            error_log("Kiyoh Product Sync: Product {$product_id} SKU '{$raw_product_code}' produced an empty code after sanitisation - skipping sync");
+            return false;
+        }
+
+        if ($product_code !== $raw_product_code) {
+            error_log("Kiyoh Product Sync: Product {$product_id} SKU sanitised from '{$raw_product_code}' to '{$product_code}' for Kiyoh compatibility");
+        }
+
         error_log("Kiyoh Product Sync: Extracting data for product {$product_id} - SKU: '{$product_code}', Name: '{$product_name}'");
 
         // Ensure we have a valid product URL
@@ -233,16 +306,10 @@ class Kiyoh_Product_Sync_Manager {
             $product_url = home_url('/product/' . urlencode(strtolower($product_code)));
         }
 
-        // Ensure we have a valid image URL
-        $image_id = $product->get_image_id();
-        $image_url = '';
-        if ($image_id) {
-            $image_url = wp_get_attachment_image_url($image_id, 'full');
-        }
-        
-        // Provide a fallback image URL if none available
+        // Resolve image_url, falling back to the parent's image (variations) then a stable Kiyoh logo.
+        $image_url = $this->resolve_product_image_url($product);
         if (!$image_url || !filter_var($image_url, FILTER_VALIDATE_URL)) {
-            $image_url = 'https://via.placeholder.com/300x300.png?text=' . urlencode($product_name);
+            $image_url = 'https://astro.kiyoh.com/static/logos/logo-1-dark.svg';
         }
 
         // Get brand from product attributes or meta
@@ -287,6 +354,79 @@ class Kiyoh_Product_Sync_Manager {
         // Use SKU as product code, fallback to product ID
         $sku = $product->get_sku();
         return !empty($sku) ? $sku : 'product_' . $product->get_id();
+    }
+
+    // Resolves a usable image URL for a product, falling back to the parent's image for variations.
+    private function resolve_product_image_url($product) {
+        // 1. The product's own featured image.
+        $image_id = $product->get_image_id();
+        if ($image_id) {
+            $url = wp_get_attachment_image_url($image_id, 'full');
+            if ($url && filter_var($url, FILTER_VALIDATE_URL)) {
+                return $url;
+            }
+        }
+
+        // 2. For a variation, inherit the parent variable product's image.
+        if (is_callable(array($product, 'get_parent_id'))) {
+            $parent_id = $product->get_parent_id();
+            if ($parent_id) {
+                $parent = wc_get_product($parent_id);
+                if ($parent) {
+                    $parent_image_id = $parent->get_image_id();
+                    if ($parent_image_id) {
+                        $url = wp_get_attachment_image_url($parent_image_id, 'full');
+                        if ($url && filter_var($url, FILTER_VALIDATE_URL)) {
+                            return $url;
+                        }
+                    }
+                }
+            }
+        }
+
+        return '';
+    }
+
+    // Sanitises and length-caps a raw SKU into a Kiyoh-safe, deterministic product_code.
+    public static function sanitize_product_code($sku) {
+        $code = (string) $sku;
+
+        // Normalise common Unicode dashes to ASCII hyphen before stripping.
+        $code = str_replace(
+            array("\xE2\x80\x93", "\xE2\x80\x94", "\xE2\x80\x92", "\xE2\x88\x92"),
+            '-',
+            $code
+        );
+
+        // Transliterate remaining non-ASCII (accents etc.) to ASCII when possible.
+        if (function_exists('iconv')) {
+            $transliterated = @iconv('UTF-8', 'ASCII//TRANSLIT//IGNORE', $code);
+            if ($transliterated !== false) {
+                $code = $transliterated;
+            }
+        }
+
+        // Remove quotes entirely (they break both the pattern and JSON safety).
+        $code = str_replace(array('"', "'", '`'), '', $code);
+
+        // Replace any character outside the safe set with a hyphen.
+        $code = preg_replace('/[^A-Za-z0-9._\-\/]+/', '-', $code);
+
+        // Collapse repeated hyphens and trim leading/trailing separators.
+        $code = preg_replace('/-{2,}/', '-', $code);
+        $code = trim($code, "-._/ \t\n\r\0\x0B");
+
+        // Truncate to under 50 chars, appending a hash of the original SKU to preserve uniqueness.
+        if (strlen($code) > self::MAX_PRODUCT_CODE_LENGTH) {
+            $hash    = substr(md5((string) $sku), 0, self::PRODUCT_CODE_HASH_LENGTH);
+            $prefix_len = self::MAX_PRODUCT_CODE_LENGTH - self::PRODUCT_CODE_HASH_LENGTH - 1; // -1 for the '-'
+            $prefix  = substr($code, 0, $prefix_len);
+            // Avoid a trailing separator right before the hash join.
+            $prefix  = rtrim($prefix, "-._/");
+            $code    = $prefix . '-' . $hash;
+        }
+
+        return $code;
     }
 
     private function get_product_brand($product) {
