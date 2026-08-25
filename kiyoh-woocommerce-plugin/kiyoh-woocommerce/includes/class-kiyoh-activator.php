@@ -39,9 +39,29 @@ class Kiyoh_Activator {
         
         // Schedule cron events
         self::schedule_cron_events();
+
+        // Put stored Kiyoh reviews and ministars back without an API wait.
+        self::restore_stored_reviews();
         
         // Flush rewrite rules
         flush_rewrite_rules();
+    }
+
+    /**
+     * After reactivation, restore hidden Kiyoh comments and ministars from
+     * stored meta when the review source is Kiyoh or both.
+     */
+    private static function restore_stored_reviews() {
+        if (!class_exists('Kiyoh_Rating_Manager')) {
+            $rating_manager = KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
+            if (file_exists($rating_manager)) {
+                require_once $rating_manager;
+            }
+        }
+
+        if (class_exists('Kiyoh_Rating_Manager')) {
+            Kiyoh_Rating_Manager::restore_kiyoh_reviews_on_activate();
+        }
     }
 
     /**
@@ -163,6 +183,10 @@ class Kiyoh_Activator {
                 'items_per_page' => 10,
                 'show_aggregates' => true,
             ),
+            'ratings' => array(
+                'enabled' => true,
+                'source' => 'kiyoh',
+            ),
         );
 
         // Only set defaults if options don't exist
@@ -186,6 +210,10 @@ class Kiyoh_Activator {
         // Schedule cache cleanup
         if (!wp_next_scheduled('kiyoh_cleanup_cache')) {
             wp_schedule_event(time(), 'daily', 'kiyoh_cleanup_cache');
+        }
+
+        if (!wp_next_scheduled('kiyoh_sync_product_ratings')) {
+            wp_schedule_event(time(), 'hourly', 'kiyoh_sync_product_ratings');
         }
     }
 }

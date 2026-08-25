@@ -45,13 +45,18 @@ class Kiyoh_Plugin {
     protected $invitation_manager;
 
     /**
+     * The rating manager instance.
+     */
+    protected $rating_manager;
+
+    /**
      * Define the core functionality of the plugin.
      */
     public function __construct() {
         if (defined('KIYOH_WOOCOMMERCE_VERSION')) {
             $this->version = KIYOH_WOOCOMMERCE_VERSION;
         } else {
-            $this->version = '1.1.0';
+            $this->version = '1.1.3';
         }
         $this->plugin_name = 'kiyoh-woocommerce';
 
@@ -97,6 +102,7 @@ class Kiyoh_Plugin {
          */
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-product-sync-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-manager.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
 
         $this->loader = new Kiyoh_Loader();
     }
@@ -135,6 +141,7 @@ class Kiyoh_Plugin {
         if (class_exists('WooCommerce')) {
             $this->product_sync_manager = new Kiyoh_Product_Sync_Manager();
             $this->invitation_manager = new Kiyoh_Invitation_Manager();
+            $this->rating_manager = new Kiyoh_Rating_Manager();
         }
     }
 

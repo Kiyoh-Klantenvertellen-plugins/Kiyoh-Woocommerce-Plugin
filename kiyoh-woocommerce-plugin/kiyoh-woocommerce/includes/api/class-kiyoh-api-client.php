@@ -159,6 +159,30 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         $response = $this->make_request('GET', $url);
         return new Kiyoh_Api_Response($response);
     }
+
+    /**
+     * Products that received new reviews since a UTC timestamp.
+     * Returns cluster-level averageRating / numberReviews without review bodies.
+     *
+     * @param string $updated_since UTC, e.g. 2020-01-15T01:00:00.000Z
+     */
+    public function get_updated_products($updated_since) {
+        $params = array(
+            'locationId' => $this->location_id,
+            'updatedSince' => $updated_since
+        );
+
+        $query = http_build_query($params);
+        $response = $this->make_request('GET', '/v1/publication/product?' . $query);
+
+        // Other publication endpoints in this plugin use /external; retry if the
+        // documented path is not available on this platform version.
+        if (!$response['success'] && isset($response['response_code']) && (int) $response['response_code'] === 404) {
+            $response = $this->make_request('GET', '/v1/publication/product/external?' . $query);
+        }
+
+        return new Kiyoh_Api_Response($response);
+    }
     
     public function get_company_stats() {
         $endpoint = '/v1/publication/review/external/location/statistics';
@@ -259,6 +283,10 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     
     private function get_timeout($endpoint) {
         if (strpos($endpoint, '/bulk') !== false) {
+            return 30;
+        }
+
+        if (strpos($endpoint, '/publication/product') !== false) {
             return 30;
         }
         

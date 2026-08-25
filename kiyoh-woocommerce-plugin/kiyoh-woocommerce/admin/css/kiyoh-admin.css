@@ -236,8 +236,33 @@
 @keyframes kiyoh-spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-}/* Prod
-uct Sync Specific Styles */
+}
+
+.kiyoh-rating-sync-progress {
+    margin-top: 10px;
+    max-width: 420px;
+}
+
+.kiyoh-rating-sync-progress p {
+    margin: 0 0 8px;
+}
+
+.kiyoh-rating-sync-progress-bar {
+    height: 8px;
+    background: #dcdcde;
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.kiyoh-rating-sync-progress-bar span {
+    display: block;
+    height: 100%;
+    width: 0;
+    background: #0073aa;
+    transition: width 0.3s ease;
+}
+
+/* Product Sync Specific Styles */
 .kiyoh-sync-stats {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

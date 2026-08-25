@@ -13,6 +13,8 @@ class Kiyoh_Admin {
         add_action('wp_ajax_kiyoh_bulk_sync', array($this, 'ajax_bulk_sync'));
         add_action('wp_ajax_kiyoh_bulk_sync_products', array($this, 'ajax_bulk_sync_products'));
         add_action('wp_ajax_kiyoh_test_api_connection', array($this, 'ajax_test_api_connection'));
+        add_action('wp_ajax_kiyoh_sync_product_ratings', array($this, 'ajax_sync_product_ratings'));
+        add_action('wp_ajax_kiyoh_rating_sync_status', array($this, 'ajax_rating_sync_status'));
     }
 
     public function enqueue_styles() {
@@ -23,14 +25,33 @@ class Kiyoh_Admin {
         wp_enqueue_script($this->plugin_name, KIYOH_WOOCOMMERCE_PLUGIN_URL . 'admin/js/kiyoh-admin.js', array('jquery'), $this->version, false);
         
         // Localize script for AJAX
+        $rating_sync = array(
+            'status' => 'idle',
+            'active' => false,
+            'processed' => 0,
+            'total' => 0,
+            'percent' => 0,
+            'message' => '',
+            'error' => '',
+            'last_sync' => ''
+        );
+        if (class_exists('Kiyoh_Rating_Manager')) {
+            $rating_manager = new Kiyoh_Rating_Manager();
+            $rating_sync = $rating_manager->get_public_sync_status();
+        }
+
         wp_localize_script($this->plugin_name, 'kiyoh_admin_ajax', array(
             'ajax_url' => admin_url('admin-ajax.php'),
             'nonce' => wp_create_nonce('kiyoh_admin_nonce'),
+            'rating_sync' => $rating_sync,
             'strings' => array(
                 'syncing' => __('Syncing...', 'kiyoh-woocommerce'),
+                'syncing_progress' => __('Syncing ratings… %1$d of %2$d', 'kiyoh-woocommerce'),
+                'sync_queued' => __('Rating sync queued…', 'kiyoh-woocommerce'),
                 'clearing' => __('Clearing...', 'kiyoh-woocommerce'),
                 'error' => __('Error occurred', 'kiyoh-woocommerce'),
-                'success' => __('Success', 'kiyoh-woocommerce')
+                'success' => __('Success', 'kiyoh-woocommerce'),
+                'last_sync' => __('Last sync: %s', 'kiyoh-woocommerce')
             )
         ));
     }
@@ -485,7 +506,26 @@ class Kiyoh_Admin {
             );
         }
 
+        if (isset($input['ratings'])) {
+            $source = isset($input['ratings']['source']) ? sanitize_text_field($input['ratings']['source']) : 'kiyoh';
+            if (!in_array($source, array('kiyoh', 'woocommerce', 'both'), true)) {
+                $source = 'kiyoh';
+            }
 
+            $sanitized['ratings'] = array(
+                'enabled' => ($source !== 'woocommerce'),
+                'source' => $source
+            );
+        }
+
+        $existing = get_option('kiyoh_woocommerce_settings', array());
+        if (is_array($existing)) {
+            foreach ($existing as $section => $values) {
+                if (!isset($sanitized[$section])) {
+                    $sanitized[$section] = $values;
+                }
+            }
+        }
 
         return $sanitized;
     }
@@ -615,6 +655,61 @@ class Kiyoh_Admin {
         } else {
             wp_send_json_error($result);
         }
+    }
+
+    /**
+     * AJAX handler: queue a background rating sync and run the first chunk.
+     */
+    public function ajax_sync_product_ratings() {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+            wp_die('Security check failed');
+        }
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Insufficient permissions');
+        }
+
+        $rating_manager = new Kiyoh_Rating_Manager();
+        $queued = $rating_manager->queue_full_sync();
+
+        if (isset($queued['status']) && $queued['status'] === 'failed' && !empty($queued['error'])) {
+            wp_send_json_error(array(
+                'message' => $queued['error'],
+                'sync' => $rating_manager->get_public_sync_status()
+            ));
+        }
+
+        $status = $rating_manager->process_job_chunk();
+
+        wp_send_json_success(array(
+            'message' => isset($status['message']) ? $status['message'] : '',
+            'sync' => $status
+        ));
+    }
+
+    /**
+     * AJAX handler: rating-sync progress. Also advances the job when no worker
+     * is currently holding the lock (covers DISABLE_WP_CRON).
+     */
+    public function ajax_rating_sync_status() {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+            wp_die('Security check failed');
+        }
+
+        if (!current_user_can('manage_woocommerce')) {
+            wp_die('Insufficient permissions');
+        }
+
+        $rating_manager = new Kiyoh_Rating_Manager();
+        $status = $rating_manager->get_public_sync_status();
+
+        if (!empty($status['active'])) {
+            $status = $rating_manager->process_job_chunk();
+        }
+
+        wp_send_json_success(array(
+            'sync' => $status
+        ));
     }
 
     /**

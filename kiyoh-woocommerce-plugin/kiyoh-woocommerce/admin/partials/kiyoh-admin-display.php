@@ -38,6 +38,9 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
         <a href="?page=kiyoh-settings&tab=product-sync" class="nav-tab <?php echo $active_tab == 'product-sync' ? 'nav-tab-active' : ''; ?>">
             <?php _e('Product Sync', 'kiyoh-woocommerce'); ?>
         </a>
+        <a href="?page=kiyoh-settings&tab=reviews" class="nav-tab <?php echo $active_tab == 'reviews' ? 'nav-tab-active' : ''; ?>">
+            <?php _e('Reviews', 'kiyoh-woocommerce'); ?>
+        </a>
         <a href="?page=kiyoh-settings&tab=invitations" class="nav-tab <?php echo $active_tab == 'invitations' ? 'nav-tab-active' : ''; ?>">
             <?php _e('Invitations', 'kiyoh-woocommerce'); ?>
         </a>
@@ -175,6 +178,92 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
                 </table>
                 
                 <div id="product-sync-results" style="margin-top: 20px;"></div>
+            </div>
+
+            <!-- Reviews Tab -->
+            <div class="tab-panel tab-reviews" <?php echo $active_tab != 'reviews' ? 'style="display:none;"' : ''; ?>>
+                <h2><?php _e('Review Display Settings', 'kiyoh-woocommerce'); ?></h2>
+                <p><?php _e('Choose which ratings drive WooCommerce catalog and product-page ministars, and which reviews appear in the product Reviews tab. Kiyoh scores are divided by 2 to match WooCommerce\'s 5-star scale. "Both" is a weighted average by review count.', 'kiyoh-woocommerce'); ?></p>
+                <input type="hidden" name="kiyoh_woocommerce_settings[ratings][_section]" value="1" />
+                <?php
+                $rating_source = 'kiyoh';
+                if (!empty($settings['ratings']['source'])) {
+                    $rating_source = $settings['ratings']['source'];
+                } elseif (isset($settings['ratings']['enabled']) && empty($settings['ratings']['enabled'])) {
+                    $rating_source = 'woocommerce';
+                }
+                ?>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">
+                            <?php _e('Review source', 'kiyoh-woocommerce'); ?>
+                        </th>
+                        <td>
+                            <fieldset>
+                                <label>
+                                    <input type="radio" name="kiyoh_woocommerce_settings[ratings][source]" value="kiyoh" <?php checked($rating_source, 'kiyoh'); ?> />
+                                    <?php _e('Kiyoh only', 'kiyoh-woocommerce'); ?>
+                                </label><br />
+                                <label>
+                                    <input type="radio" name="kiyoh_woocommerce_settings[ratings][source]" value="woocommerce" <?php checked($rating_source, 'woocommerce'); ?> />
+                                    <?php _e('WooCommerce only', 'kiyoh-woocommerce'); ?>
+                                </label><br />
+                                <label>
+                                    <input type="radio" name="kiyoh_woocommerce_settings[ratings][source]" value="both" <?php checked($rating_source, 'both'); ?> />
+                                    <?php _e('Both (aggregate)', 'kiyoh-woocommerce'); ?>
+                                </label>
+                            </fieldset>
+                            <p class="description"><?php _e('This applies to ministars and the product Reviews tab. Kiyoh only shows Kiyoh ratings and comments. WooCommerce only shows native store reviews. Both aggregates the star scores and lists both sets of comments.', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label><?php _e('Sync Product Ratings', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <button type="button" id="sync-product-ratings" class="button button-secondary" data-idle-label="<?php echo esc_attr__('Sync Ratings Now', 'kiyoh-woocommerce'); ?>" disabled>
+                                <?php _e('Sync Ratings Now', 'kiyoh-woocommerce'); ?>
+                            </button>
+                            <p class="description"><?php _e('Fetch Kiyoh product ratings and comments and apply them to matching products (by SKU). Ratings also refresh automatically every hour. Kiyoh comments are imported when the source is Kiyoh only or Both.', 'kiyoh-woocommerce'); ?></p>
+                            <p class="description"><?php _e('Sync runs in the background (one product every 3 seconds). You can leave this page and come back; progress is kept.', 'kiyoh-woocommerce'); ?></p>
+                            <?php
+                            $rating_sync_state = get_option('kiyoh_ratings_sync_state', array());
+                            $rating_sync_job = get_option('kiyoh_ratings_sync_job', array());
+                            $rating_job_active = !empty($rating_sync_job['status']) && in_array($rating_sync_job['status'], array('queued', 'running'), true);
+                            ?>
+                            <p class="description" id="rating-sync-last" <?php echo empty($rating_sync_state['last_sync_local']) ? 'style="display:none;"' : ''; ?>>
+                                <?php
+                                if (!empty($rating_sync_state['last_sync_local'])) {
+                                    printf(
+                                        /* translators: %s: local datetime of last rating sync */
+                                        esc_html__('Last sync: %s', 'kiyoh-woocommerce'),
+                                        esc_html($rating_sync_state['last_sync_local'])
+                                    );
+                                }
+                                ?>
+                            </p>
+                            <div id="rating-sync-progress" class="kiyoh-rating-sync-progress" <?php echo $rating_job_active ? '' : 'style="display:none;"'; ?>>
+                                <p>
+                                    <span class="kiyoh-spinner"></span>
+                                    <span class="kiyoh-rating-sync-progress-text">
+                                        <?php
+                                        if ($rating_job_active) {
+                                            printf(
+                                                /* translators: 1: processed count, 2: total count */
+                                                esc_html__('Syncing ratings… %1$d of %2$d', 'kiyoh-woocommerce'),
+                                                isset($rating_sync_job['processed']) ? (int) $rating_sync_job['processed'] : 0,
+                                                isset($rating_sync_job['total']) ? (int) $rating_sync_job['total'] : 1
+                                            );
+                                        }
+                                        ?>
+                                    </span>
+                                </p>
+                                <div class="kiyoh-rating-sync-progress-bar"><span></span></div>
+                            </div>
+                            <div id="rating-sync-results" style="margin-top: 10px;"></div>
+                        </td>
+                    </tr>
+                </table>
             </div>
             
             <!-- Invitations Tab -->

@@ -7,10 +7,15 @@
 
     var KiyohAdmin = {
 
+        ratingSyncTimer: null,
+        ratingSyncRequest: null,
+        ratingSyncActive: false,
+
         init: function () {
             this.bindEvents();
             this.initTabs();
             this.validateForm();
+            this.initRatingSyncStatus();
         },
 
         bindEvents: function () {
@@ -25,6 +30,9 @@
 
             // Test API connection button
             $(document).on('click', '#test-api-connection', this.handleTestApiConnection);
+
+            // Product rating sync button
+            $(document).on('click', '#sync-product-ratings', this.handleRatingSync);
 
             // Auto-sync checkbox handler
             $(document).on('change', 'input[name*="auto_sync"]', this.handleAutoSyncChange);
@@ -113,6 +121,8 @@
             // Enable/disable test API connection button based on credentials
             $('#test-api-connection').prop('disabled', !hasCredentials);
 
+            $('#sync-product-ratings').prop('disabled', !hasCredentials || KiyohAdmin.ratingSyncActive);
+
             return hasCredentials;
         },
 
@@ -136,6 +146,7 @@
             if (window.kiyohAdminData && window.kiyohAdminData.hasCredentials) {
                 $('#bulk-sync-products').prop('disabled', false);
                 $('#test-api-connection').prop('disabled', false);
+                $('#sync-product-ratings').prop('disabled', KiyohAdmin.ratingSyncActive);
             }
         },
 
@@ -190,6 +201,174 @@
                     $button.prop('disabled', false).text(originalText);
                 }
             });
+        },
+
+        initRatingSyncStatus: function () {
+            if (!$('#sync-product-ratings').length) {
+                return;
+            }
+
+            var sync = kiyoh_admin_ajax.rating_sync || {};
+            KiyohAdmin.renderRatingSyncStatus(sync);
+            if (sync.active) {
+                KiyohAdmin.startRatingSyncPolling();
+            }
+        },
+
+        handleRatingSync: function (e) {
+            e.preventDefault();
+
+            if (!KiyohAdmin.validateCredentials()) {
+                KiyohAdmin.showNotice('error', 'Please configure your API credentials first.');
+                return;
+            }
+
+            KiyohAdmin.setRatingSyncButtonState(true, kiyoh_admin_ajax.strings.sync_queued);
+            KiyohAdmin.showRatingSyncProgress(kiyoh_admin_ajax.strings.sync_queued, 0);
+
+            $.ajax({
+                url: kiyoh_admin_ajax.ajax_url,
+                type: 'POST',
+                timeout: 120000,
+                data: {
+                    action: 'kiyoh_sync_product_ratings',
+                    nonce: kiyoh_admin_ajax.nonce
+                },
+                success: function (response) {
+                    var sync = (response.data && response.data.sync) ? response.data.sync : {};
+                    if (response.success) {
+                        KiyohAdmin.renderRatingSyncStatus(sync);
+                        if (sync.active) {
+                            KiyohAdmin.startRatingSyncPolling();
+                        }
+                    } else {
+                        var errData = response.data || {};
+                        KiyohAdmin.renderRatingSyncStatus(errData.sync || { status: 'failed', error: errData.message });
+                        KiyohAdmin.showRatingSyncResult('error', errData.message || kiyoh_admin_ajax.strings.error);
+                    }
+                },
+                error: function () {
+                    KiyohAdmin.setRatingSyncButtonState(false);
+                    KiyohAdmin.showRatingSyncResult('error', kiyoh_admin_ajax.strings.error);
+                }
+            });
+        },
+
+        startRatingSyncPolling: function () {
+            if (KiyohAdmin.ratingSyncTimer || KiyohAdmin.ratingSyncRequest) {
+                return;
+            }
+
+            KiyohAdmin.pollRatingSyncStatus();
+        },
+
+        stopRatingSyncPolling: function () {
+            if (KiyohAdmin.ratingSyncTimer) {
+                clearTimeout(KiyohAdmin.ratingSyncTimer);
+                KiyohAdmin.ratingSyncTimer = null;
+            }
+        },
+
+        pollRatingSyncStatus: function () {
+            if (KiyohAdmin.ratingSyncRequest) {
+                return;
+            }
+
+            KiyohAdmin.ratingSyncRequest = $.ajax({
+                url: kiyoh_admin_ajax.ajax_url,
+                type: 'POST',
+                timeout: 120000,
+                data: {
+                    action: 'kiyoh_rating_sync_status',
+                    nonce: kiyoh_admin_ajax.nonce
+                },
+                success: function (response) {
+                    var sync = (response.data && response.data.sync) ? response.data.sync : {};
+                    KiyohAdmin.renderRatingSyncStatus(sync);
+                    if (!sync.active) {
+                        KiyohAdmin.stopRatingSyncPolling();
+                        return;
+                    }
+
+                    KiyohAdmin.ratingSyncTimer = setTimeout(function () {
+                        KiyohAdmin.ratingSyncTimer = null;
+                        KiyohAdmin.pollRatingSyncStatus();
+                    }, 1000);
+                },
+                error: function () {
+                    KiyohAdmin.ratingSyncTimer = setTimeout(function () {
+                        KiyohAdmin.ratingSyncTimer = null;
+                        KiyohAdmin.pollRatingSyncStatus();
+                    }, 3000);
+                },
+                complete: function () {
+                    KiyohAdmin.ratingSyncRequest = null;
+                }
+            });
+        },
+
+        renderRatingSyncStatus: function (sync) {
+            sync = sync || {};
+
+            KiyohAdmin.ratingSyncActive = !!sync.active;
+
+            if (sync.last_sync) {
+                var lastSyncText = kiyoh_admin_ajax.strings.last_sync.replace('%s', sync.last_sync);
+                var $last = $('#rating-sync-last');
+                if ($last.length) {
+                    $last.text(lastSyncText).show();
+                }
+            }
+
+            if (sync.active) {
+                var progress = sync.message || kiyoh_admin_ajax.strings.sync_queued;
+                if (!sync.message && typeof sync.processed !== 'undefined') {
+                    progress = kiyoh_admin_ajax.strings.syncing_progress
+                        .replace('%1$d', sync.processed)
+                        .replace('%2$d', sync.total || 0);
+                }
+                KiyohAdmin.showRatingSyncProgress(progress, sync.percent || 0);
+                KiyohAdmin.setRatingSyncButtonState(true, progress);
+                return;
+            }
+
+            KiyohAdmin.hideRatingSyncProgress();
+            KiyohAdmin.setRatingSyncButtonState(false);
+
+            if (sync.status === 'completed' && sync.message) {
+                KiyohAdmin.showRatingSyncResult('success', sync.message);
+            } else if (sync.status === 'failed' && (sync.error || sync.message)) {
+                KiyohAdmin.showRatingSyncResult('error', sync.error || sync.message);
+            }
+        },
+
+        setRatingSyncButtonState: function (running, label) {
+            var $button = $('#sync-product-ratings');
+            if (!$button.length) {
+                return;
+            }
+
+            if (running) {
+                $button.prop('disabled', true).html('<span class="kiyoh-spinner"></span> ' + KiyohAdmin.escapeHtml(label || kiyoh_admin_ajax.strings.syncing));
+                return;
+            }
+
+            $button.prop('disabled', false).text($button.data('idle-label') || 'Sync Ratings Now');
+        },
+
+        showRatingSyncProgress: function (text, percent) {
+            var $wrap = $('#rating-sync-progress');
+            if (!$wrap.length) {
+                return;
+            }
+
+            $wrap.show();
+            $wrap.find('.kiyoh-rating-sync-progress-text').text(text);
+            $wrap.find('.kiyoh-rating-sync-progress-bar span').css('width', Math.max(0, Math.min(100, percent || 0)) + '%');
+        },
+
+        hideRatingSyncProgress: function () {
+            $('#rating-sync-progress').hide();
         },
 
         handleTestApiConnection: function (e) {
@@ -311,6 +490,19 @@
                 setTimeout(function () {
                     $result.fadeOut();
                 }, 5000);
+            }
+        },
+
+        showRatingSyncResult: function (type, message) {
+            var noticeClass = 'notice-' + type;
+            var $result = $('<div class="notice ' + noticeClass + '"><p>' + KiyohAdmin.escapeHtml(message) + '</p></div>');
+
+            $('#rating-sync-results').html($result);
+
+            if (type === 'success') {
+                setTimeout(function () {
+                    $result.fadeOut();
+                }, 8000);
             }
         },
 

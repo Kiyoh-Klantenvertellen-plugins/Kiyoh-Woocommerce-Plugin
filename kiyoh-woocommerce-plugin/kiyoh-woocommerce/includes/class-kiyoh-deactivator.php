@@ -15,9 +15,29 @@ class Kiyoh_Deactivator {
     public static function deactivate() {
         // Clear scheduled cron events
         self::clear_cron_events();
+
+        // Hide imported Kiyoh reviews and restore native WooCommerce ratings.
+        self::restore_native_reviews();
         
         // Clear any cached data
         self::clear_cache();
+    }
+
+    /**
+     * Hide imported Kiyoh comments and restore native ministars. Kiyoh
+     * rating meta is kept for the next activation.
+     */
+    private static function restore_native_reviews() {
+        if (!class_exists('Kiyoh_Rating_Manager')) {
+            $rating_manager = KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
+            if (file_exists($rating_manager)) {
+                require_once $rating_manager;
+            }
+        }
+
+        if (class_exists('Kiyoh_Rating_Manager')) {
+            Kiyoh_Rating_Manager::hide_kiyoh_reviews_for_deactivate();
+        }
     }
 
     /**
@@ -35,6 +55,13 @@ class Kiyoh_Deactivator {
         if ($timestamp) {
             wp_unschedule_event($timestamp, 'kiyoh_cleanup_cache');
         }
+
+        $timestamp = wp_next_scheduled('kiyoh_sync_product_ratings');
+        if ($timestamp) {
+            wp_unschedule_event($timestamp, 'kiyoh_sync_product_ratings');
+        }
+        wp_clear_scheduled_hook('kiyoh_sync_product_ratings');
+        wp_clear_scheduled_hook('kiyoh_process_rating_sync');
     }
 
     /**
@@ -49,5 +76,7 @@ class Kiyoh_Deactivator {
         
         // Clear any WordPress transients
         $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_kiyoh_%' OR option_name LIKE '_transient_timeout_kiyoh_%'");
+
+        delete_option('kiyoh_ratings_sync_job');
     }
 }

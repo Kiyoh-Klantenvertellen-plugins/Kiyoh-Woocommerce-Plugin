@@ -9,6 +9,8 @@ interface Kiyoh_Api_Interface {
     public function send_invitation($invitation_data);
     
     public function get_reviews($query_params = array());
+
+    public function get_updated_products($updated_since);
     
     public function get_company_stats();
 }
