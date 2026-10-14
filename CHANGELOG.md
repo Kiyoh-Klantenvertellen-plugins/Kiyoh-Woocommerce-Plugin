@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.1.4
+
+### Fixed
+- **WooCommerce Settings tabs broke with a console TypeError.** Admin JS/CSS were enqueued on every admin screen, so `validateCredentials()` called `.val().trim()` on Kiyoh fields that only exist on **WooCommerce → Kiyoh**. On other screens `.val()` is `undefined`, which threw `TypeError` and stopped other admin scripts. Assets now load only on the Kiyoh settings page; init bails without `.kiyoh-admin-settings`; credential validation guards missing fields; tab click handlers stay scoped to the Kiyoh screen so they no longer intercept WooCommerce Settings tabs.
+
 ## v1.1.3
 
 ### Fixed

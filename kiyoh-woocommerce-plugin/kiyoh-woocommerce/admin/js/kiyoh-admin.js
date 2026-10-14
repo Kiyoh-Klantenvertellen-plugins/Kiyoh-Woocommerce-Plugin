@@ -12,6 +12,12 @@
         ratingSyncActive: false,
 
         init: function () {
+            // Bail out outside the Kiyoh settings screen so we never touch
+            // WooCommerce Settings tabs or call .val() on missing fields.
+            if (!$('.kiyoh-admin-settings').length) {
+                return;
+            }
+
             this.bindEvents();
             this.initTabs();
             this.validateForm();
@@ -55,8 +61,8 @@
                 this.switchTab(initialTab);
             }
 
-            // Handle tab clicks
-            $('.nav-tab').on('click', function (e) {
+            // Handle tab clicks (scoped so other admin nav-tabs are untouched)
+            $('.kiyoh-admin-settings .nav-tab').on('click', function (e) {
                 e.preventDefault();
                 var href = $(this).attr('href');
                 var tab = href.split('tab=')[1];
@@ -77,16 +83,18 @@
         },
 
         switchTab: function (tab) {
+            var $root = $('.kiyoh-admin-settings');
+
             // Update nav tabs
-            $('.nav-tab').removeClass('nav-tab-active');
-            $('.nav-tab[href*="tab=' + tab + '"]').addClass('nav-tab-active');
+            $root.find('.nav-tab').removeClass('nav-tab-active');
+            $root.find('.nav-tab[href*="tab=' + tab + '"]').addClass('nav-tab-active');
 
             // Show/hide tab panels
-            $('.tab-panel').hide();
-            $('.tab-' + tab).show();
+            $root.find('.tab-panel').hide();
+            $root.find('.tab-' + tab).show();
 
             // Always show submit button since tools tab is removed
-            $('#submit-section').show();
+            $root.find('#submit-section').show();
         },
 
         handlePlatformChange: function () {
@@ -111,8 +119,13 @@
             var $locationId = $('input[name*="location_id"]');
             var $apiKey = $('input[name*="api_key"]');
 
-            var hasLocationId = $locationId.val().trim().length > 0;
-            var hasApiKey = $apiKey.val().trim().length > 0;
+            // Fields are absent on non-Kiyoh screens; .val() is then undefined.
+            if (!$locationId.length || !$apiKey.length) {
+                return false;
+            }
+
+            var hasLocationId = String($locationId.val() || '').trim().length > 0;
+            var hasApiKey = String($apiKey.val() || '').trim().length > 0;
 
             // Enable/disable bulk sync button based on credentials
             var hasCredentials = hasLocationId && hasApiKey;

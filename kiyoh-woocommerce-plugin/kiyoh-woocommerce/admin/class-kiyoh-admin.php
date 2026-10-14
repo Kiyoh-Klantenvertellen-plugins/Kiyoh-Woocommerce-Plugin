@@ -17,11 +17,35 @@ class Kiyoh_Admin {
         add_action('wp_ajax_kiyoh_rating_sync_status', array($this, 'ajax_rating_sync_status'));
     }
 
-    public function enqueue_styles() {
+    /**
+     * Whether the current admin screen is the Kiyoh settings page.
+     *
+     * Assets must not load on other WooCommerce/admin screens: the admin JS
+     * binds to .nav-tab and validates credential fields that only exist here.
+     *
+     * @param string $hook Current admin page hook from admin_enqueue_scripts.
+     */
+    private function is_kiyoh_settings_page($hook) {
+        if ($hook === 'woocommerce_page_kiyoh-settings') {
+            return true;
+        }
+
+        return isset($_GET['page']) && $_GET['page'] === 'kiyoh-settings';
+    }
+
+    public function enqueue_styles($hook) {
+        if (!$this->is_kiyoh_settings_page($hook)) {
+            return;
+        }
+
         wp_enqueue_style($this->plugin_name, KIYOH_WOOCOMMERCE_PLUGIN_URL . 'admin/css/kiyoh-admin.css', array(), $this->version, 'all');
     }
 
-    public function enqueue_scripts() {
+    public function enqueue_scripts($hook) {
+        if (!$this->is_kiyoh_settings_page($hook)) {
+            return;
+        }
+
         wp_enqueue_script($this->plugin_name, KIYOH_WOOCOMMERCE_PLUGIN_URL . 'admin/js/kiyoh-admin.js', array('jquery'), $this->version, false);
         
         // Localize script for AJAX

@@ -22,7 +22,7 @@ $settings = get_option('kiyoh_woocommerce_settings', array());
 $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general';
 ?>
 
-<div class="wrap">
+<div class="wrap kiyoh-admin-settings">
     <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
     
     <?php if (isset($_GET['settings-updated']) && $_GET['settings-updated']): ?>
