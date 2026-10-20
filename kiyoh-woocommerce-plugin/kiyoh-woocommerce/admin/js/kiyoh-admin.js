@@ -46,6 +46,8 @@
             // Invitation type dropdown handler
             $(document).on('change', 'select[name*="invitation_type"]', this.handleInvitationTypeChange);
 
+            $(document).on('change', '#send_time_enabled', this.handleSendTimeToggle);
+
             // Multi-select helpers
             $(document).on('dblclick', 'select[multiple] option', this.handleMultiSelectDblClick);
         },
@@ -148,6 +150,8 @@
             if ($invitationTypeField.length) {
                 this.handleInvitationTypeChange.call($invitationTypeField[0]);
             }
+
+            this.handleSendTimeToggle();
 
             // Initialize auto-sync field visibility
             var $autoSyncField = $('input[name*="auto_sync"]');
@@ -440,6 +444,11 @@
             } else {
                 $excludeFields.closest('tr').hide();
             }
+        },
+
+        handleSendTimeToggle: function () {
+            var enabled = $('#send_time_enabled').is(':checked');
+            $('.kiyoh-send-time-options').toggle(enabled);
         },
 
         handleInvitationTypeChange: function () {

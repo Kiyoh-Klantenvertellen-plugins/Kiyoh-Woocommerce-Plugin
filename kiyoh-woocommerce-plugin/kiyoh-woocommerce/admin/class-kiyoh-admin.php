@@ -271,7 +271,7 @@ class Kiyoh_Admin {
                 'value' => $this->get_option('invitations', 'delay_days', 3),
                 'min' => 0,
                 'max' => 365,
-                'description' => __('Number of days to wait before sending invitation (0 for immediate)', 'kiyoh-woocommerce')
+                'description' => __('Number of days to wait before sending the invitation. With a preferred send time, the delay passes first and the invite goes out at the next allowed time. Otherwise Kiyoh receives this delay and sends the email.', 'kiyoh-woocommerce')
             )
         );
 
@@ -518,9 +518,15 @@ class Kiyoh_Admin {
         }
 
         if (isset($input['invitations'])) {
+            $raw_send_time = isset($input['invitations']['send_time']) ? sanitize_text_field($input['invitations']['send_time']) : '';
+            $raw_weekdays = isset($input['invitations']['send_weekdays']) ? $input['invitations']['send_weekdays'] : array();
+
             $sanitized['invitations'] = array(
                 'trigger_status' => array_map('sanitize_text_field', (array) ($input['invitations']['trigger_status'] ?? array())),
                 'delay_days' => absint($input['invitations']['delay_days'] ?? 0),
+                'send_time_enabled' => !empty($input['invitations']['send_time_enabled']),
+                'send_time' => class_exists('Kiyoh_Invitation_Schedule') ? Kiyoh_Invitation_Schedule::normalize_send_time($raw_send_time) : '',
+                'send_weekdays' => class_exists('Kiyoh_Invitation_Schedule') ? Kiyoh_Invitation_Schedule::sanitize_weekdays($raw_weekdays) : array(),
                 'invitation_type' => sanitize_text_field($input['invitations']['invitation_type'] ?? ''),
                 'max_products' => absint($input['invitations']['max_products'] ?? 0),
                 'product_sort_order' => sanitize_text_field($input['invitations']['product_sort_order'] ?? ''),
@@ -734,6 +740,157 @@ class Kiyoh_Admin {
         wp_send_json_success(array(
             'sync' => $status
         ));
+    }
+
+    /**
+     * Invitations queued for a specific shop-local send time.
+     * Rendered on WooCommerce → Kiyoh → Invitations, which already requires manage_woocommerce.
+     */
+    public function render_scheduled_invitations() {
+        if (!current_user_can('manage_woocommerce') || !class_exists('Kiyoh_Invitation_Manager')) {
+            return;
+        }
+
+        $settings = get_option('kiyoh_woocommerce_settings', array());
+        $invitations = isset($settings['invitations']) && is_array($settings['invitations']) ? $settings['invitations'] : array();
+        $schedule_on = class_exists('Kiyoh_Invitation_Schedule') && Kiyoh_Invitation_Schedule::is_schedule_mode_active($invitations);
+        $rows = Kiyoh_Invitation_Manager::get_recent_scheduled_invitations(30);
+
+        if (!$schedule_on && empty($rows)) {
+            return;
+        }
+
+        $timezone = function_exists('wp_timezone') ? wp_timezone() : new DateTimeZone('UTC');
+        $timezone_name = function_exists('wp_timezone_string') ? wp_timezone_string() : $timezone->getName();
+        if ($timezone_name === '') {
+            $timezone_name = 'UTC';
+        }
+
+        echo '<h3>' . esc_html__('Scheduled invitations', 'kiyoh-woocommerce') . '</h3>';
+        echo '<p class="description">' . sprintf(
+            /* translators: %s: WordPress timezone string */
+            esc_html__('Times use the shop timezone (%s). A pending invitation is handed to Kiyoh at that moment with no extra delay.', 'kiyoh-woocommerce'),
+            esc_html($timezone_name)
+        ) . '</p>';
+
+        if (empty($rows)) {
+            echo '<p>' . esc_html__('No invitations have been scheduled for a specific time yet.', 'kiyoh-woocommerce') . '</p>';
+            return;
+        }
+
+        echo '<table class="widefat striped kiyoh-scheduled-invitations"><thead><tr>';
+        echo '<th>' . esc_html__('Order', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Customer', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Send at', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Status', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Detail', 'kiyoh-woocommerce') . '</th>';
+        echo '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            echo '<tr>';
+            echo '<td>' . $this->scheduled_invitation_order_link($row) . '</td>';
+            echo '<td>' . esc_html($row->customer_email) . '</td>';
+            echo '<td>' . esc_html($this->format_scheduled_invitation_time($row->scheduled_for, $timezone)) . '</td>';
+            echo '<td>' . esc_html($this->scheduled_invitation_status_label($row->status)) . '</td>';
+            echo '<td>' . esc_html($this->scheduled_invitation_detail($row)) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    /**
+     * @param object $row Invitation row.
+     * @return string
+     */
+    private function scheduled_invitation_order_link($row) {
+        $order_id = isset($row->order_id) ? (int) $row->order_id : 0;
+        $label = '#' . $order_id;
+        $url = '';
+
+        if ($order_id && function_exists('wc_get_order')) {
+            $order = wc_get_order($order_id);
+            if ($order && is_a($order, 'WC_Order')) {
+                $label = '#' . $order->get_order_number();
+                $url = $order->get_edit_order_url();
+            }
+        }
+
+        if ($url) {
+            return '<a href="' . esc_url($url) . '">' . esc_html($label) . '</a>';
+        }
+
+        return esc_html($label);
+    }
+
+    /**
+     * @param string       $gmt_mysql GMT datetime from scheduled_for.
+     * @param DateTimeZone $timezone  Shop timezone.
+     * @return string
+     */
+    private function format_scheduled_invitation_time($gmt_mysql, DateTimeZone $timezone) {
+        try {
+            $utc = new DateTimeImmutable($gmt_mysql, new DateTimeZone('UTC'));
+            return $utc->setTimezone($timezone)->format('Y-m-d H:i');
+        } catch (Exception $e) {
+            return (string) $gmt_mysql;
+        }
+    }
+
+    /**
+     * @param string $status
+     * @return string
+     */
+    private function scheduled_invitation_status_label($status) {
+        $labels = array(
+            'scheduled' => __('Scheduled', 'kiyoh-woocommerce'),
+            'sending' => __('Sending', 'kiyoh-woocommerce'),
+            'sent' => __('Sent', 'kiyoh-woocommerce'),
+            'error' => __('Error', 'kiyoh-woocommerce'),
+            'skipped' => __('Skipped', 'kiyoh-woocommerce'),
+        );
+
+        return isset($labels[$status]) ? $labels[$status] : (string) $status;
+    }
+
+    /**
+     * @param object $row
+     * @return string
+     */
+    private function scheduled_invitation_detail($row) {
+        $decoded = array();
+        if (!empty($row->response_data)) {
+            $parsed = json_decode($row->response_data, true);
+            if (is_array($parsed)) {
+                $decoded = $parsed;
+            }
+        }
+
+        if (!empty($decoded['note'])) {
+            $notes = array(
+                'cancelled' => __('Order is cancelled', 'kiyoh-woocommerce'),
+                'refunded' => __('Order is refunded', 'kiyoh-woocommerce'),
+                'failed' => __('Order has failed', 'kiyoh-woocommerce'),
+                'trash' => __('Order is in the trash', 'kiyoh-woocommerce'),
+                'no_email' => __('Order has no customer email', 'kiyoh-woocommerce'),
+                'excluded' => __('Customer is excluded', 'kiyoh-woocommerce'),
+                'already_sent' => __('An invitation was already sent', 'kiyoh-woocommerce'),
+                'order_missing' => __('Order no longer exists', 'kiyoh-woocommerce'),
+                'send_did_not_complete' => __('Send did not complete', 'kiyoh-woocommerce'),
+            );
+            $code = $decoded['note'];
+            return isset($notes[$code]) ? $notes[$code] : sanitize_text_field($code);
+        }
+
+        if ($row->status === 'sent' && !empty($row->sent_at)) {
+            return sprintf(
+                /* translators: %s: local datetime the API call was recorded */
+                __('Sent at %s', 'kiyoh-woocommerce'),
+                $row->sent_at
+            );
+        }
+
+        return '';
     }
 
     /**

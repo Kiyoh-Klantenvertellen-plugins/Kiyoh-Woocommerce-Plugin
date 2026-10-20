@@ -62,6 +62,19 @@ class Kiyoh_Deactivator {
         }
         wp_clear_scheduled_hook('kiyoh_sync_product_ratings');
         wp_clear_scheduled_hook('kiyoh_process_rating_sync');
+
+        // Stop send-time jobs while the plugin is inactive. Rows stay scheduled
+        // and are queued again on the next activation.
+        $schedule_class = KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-schedule.php';
+        if (!class_exists('Kiyoh_Invitation_Schedule') && file_exists($schedule_class)) {
+            require_once $schedule_class;
+        }
+
+        $hook = class_exists('Kiyoh_Invitation_Schedule') ? Kiyoh_Invitation_Schedule::HOOK : 'kiyoh_send_scheduled_invitation';
+        if (function_exists('as_unschedule_all_actions')) {
+            as_unschedule_all_actions($hook);
+        }
+        wp_clear_scheduled_hook($hook);
     }
 
     /**

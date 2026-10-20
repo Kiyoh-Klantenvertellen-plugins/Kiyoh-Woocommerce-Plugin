@@ -467,3 +467,12 @@
 .kiyoh-test-list .test-message {
     color: #50575e;
 }
+
+.kiyoh-weekday-option {
+    display: inline-block;
+    margin: 0 14px 6px 0;
+}
+
+.kiyoh-scheduled-invitations {
+    margin-top: 8px;
+}

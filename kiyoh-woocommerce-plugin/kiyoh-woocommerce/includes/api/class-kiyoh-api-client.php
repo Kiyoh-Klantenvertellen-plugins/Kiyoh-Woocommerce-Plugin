@@ -18,12 +18,23 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     private function get_base_url($platform) {
         switch ($platform) {
             case 'kiyoh':
-                return 'https://www.kiyoh.com';
+                $url = 'https://www.kiyoh.com';
+                break;
             case 'klantenvertellen':
-                return 'https://www.klantenvertellen.nl';
+                $url = 'https://www.klantenvertellen.nl';
+                break;
             default:
                 throw new InvalidArgumentException('Unsupported platform: ' . $platform);
         }
+
+        /**
+         * Override the API host. Default is the live Kiyoh or Klantenvertellen host.
+         * Used by local test installs to point at a mock; production callers leave it alone.
+         *
+         * @param string $url      Base URL without a trailing path.
+         * @param string $platform kiyoh|klantenvertellen
+         */
+        return apply_filters('kiyoh_api_base_url', $url, $platform);
     }
     
     public function sync_product($product_data) {
