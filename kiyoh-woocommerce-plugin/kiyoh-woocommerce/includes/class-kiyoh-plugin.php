@@ -56,7 +56,7 @@ class Kiyoh_Plugin {
         if (defined('KIYOH_WOOCOMMERCE_VERSION')) {
             $this->version = KIYOH_WOOCOMMERCE_VERSION;
         } else {
-            $this->version = '1.1.4';
+            $this->version = '1.2.0';
         }
         $this->plugin_name = 'kiyoh-woocommerce';
 
@@ -101,6 +101,7 @@ class Kiyoh_Plugin {
          * Manager classes for handling business logic
          */
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-product-sync-manager.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-schedule.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
 
@@ -177,30 +178,15 @@ class Kiyoh_Plugin {
     }
 
     /**
-     * Process scheduled invitations via cron
+     * Hourly fallback for invitations queued for a specific send time.
+     * Immediate invitations never go through this hook.
      */
     public function process_scheduled_invitations() {
         if (!class_exists('WooCommerce') || !$this->invitation_manager) {
             return;
         }
 
-        global $wpdb;
-        $table_name = $wpdb->prefix . 'kiyoh_invitations';
-        
-        // Get invitations that are scheduled for now or earlier
-        $scheduled_invitations = $wpdb->get_results(
-            "SELECT order_id FROM {$table_name} 
-             WHERE status = 'scheduled' 
-             AND scheduled_for <= NOW() 
-             LIMIT 50"
-        );
-
-        foreach ($scheduled_invitations as $invitation) {
-            $order = wc_get_order($invitation->order_id);
-            if ($order) {
-                $this->invitation_manager->send_invitation($order);
-            }
-        }
+        $this->invitation_manager->process_due_scheduled_invitations();
     }
 
     /**

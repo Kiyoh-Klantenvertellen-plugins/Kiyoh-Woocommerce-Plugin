@@ -298,7 +298,66 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
                         </th>
                         <td>
                             <input type="number" id="delay_days" name="kiyoh_woocommerce_settings[invitations][delay_days]" value="<?php echo esc_attr(isset($settings['invitations']['delay_days']) ? $settings['invitations']['delay_days'] : 3); ?>" min="0" max="365" class="small-text" />
-                            <p class="description"><?php _e('Number of days to wait before sending invitation (0 for immediate)', 'kiyoh-woocommerce'); ?></p>
+                            <p class="description"><?php esc_html_e('Number of days to wait before sending the invitation. With a preferred send time, the delay passes first and the invite goes out at the next allowed time. Otherwise Kiyoh receives this delay and sends the email.', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="send_time_enabled"><?php esc_html_e('Preferred send time', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <?php $send_time_enabled = !empty($settings['invitations']['send_time_enabled']); ?>
+                            <input type="checkbox" id="send_time_enabled" name="kiyoh_woocommerce_settings[invitations][send_time_enabled]" value="1" <?php checked($send_time_enabled, true); ?> />
+                            <p class="description"><?php esc_html_e('Optional. Turn this on to send the invitation at a specific time of day in the shop timezone (Settings → General). Leave it off, or leave the time empty, to keep the current behaviour: the plugin calls Kiyoh immediately and Kiyoh waits the number of days above.', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
+
+                    <tr class="kiyoh-send-time-options">
+                        <th scope="row">
+                            <label for="send_time"><?php esc_html_e('Send at', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <input type="time" id="send_time" name="kiyoh_woocommerce_settings[invitations][send_time]" value="<?php echo esc_attr(isset($settings['invitations']['send_time']) ? $settings['invitations']['send_time'] : ''); ?>" step="60" />
+                            <p class="description">
+                                <?php
+                                $shop_timezone = function_exists('wp_timezone_string') ? wp_timezone_string() : 'UTC';
+                                echo esc_html(sprintf(
+                                    /* translators: %s: WordPress timezone string */
+                                    __('Time of day (%s). After the delay, the invitation is sent at the next occurrence of this time.', 'kiyoh-woocommerce'),
+                                    $shop_timezone !== '' ? $shop_timezone : 'UTC'
+                                ));
+                                ?>
+                            </p>
+                        </td>
+                    </tr>
+
+                    <tr class="kiyoh-send-time-options">
+                        <th scope="row"><?php esc_html_e('Allowed days', 'kiyoh-woocommerce'); ?></th>
+                        <td>
+                            <fieldset>
+                                <legend class="screen-reader-text"><?php esc_html_e('Allowed days', 'kiyoh-woocommerce'); ?></legend>
+                                <?php
+                                $weekday_labels = array(
+                                    1 => __('Monday', 'kiyoh-woocommerce'),
+                                    2 => __('Tuesday', 'kiyoh-woocommerce'),
+                                    3 => __('Wednesday', 'kiyoh-woocommerce'),
+                                    4 => __('Thursday', 'kiyoh-woocommerce'),
+                                    5 => __('Friday', 'kiyoh-woocommerce'),
+                                    6 => __('Saturday', 'kiyoh-woocommerce'),
+                                    7 => __('Sunday', 'kiyoh-woocommerce'),
+                                );
+                                $selected_weekdays = isset($settings['invitations']['send_weekdays']) ? array_map('intval', (array) $settings['invitations']['send_weekdays']) : array();
+                                foreach ($weekday_labels as $day_number => $day_label) :
+                                    $day_id = 'send_weekday_' . $day_number;
+                                    ?>
+                                    <label for="<?php echo esc_attr($day_id); ?>" class="kiyoh-weekday-option">
+                                        <input type="checkbox" id="<?php echo esc_attr($day_id); ?>" name="kiyoh_woocommerce_settings[invitations][send_weekdays][]" value="<?php echo esc_attr($day_number); ?>" <?php checked(in_array($day_number, $selected_weekdays, true)); ?> />
+                                        <?php echo esc_html($day_label); ?>
+                                    </label>
+                                <?php endforeach; ?>
+                            </fieldset>
+                            <p class="description"><?php esc_html_e('Optional. Limit that time to selected days. Leave every day unchecked to allow all days.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
                     
@@ -414,6 +473,12 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
                         </td>
                     </tr>
                 </table>
+
+                <?php
+                if (isset($this) && is_object($this) && method_exists($this, 'render_scheduled_invitations')) {
+                    $this->render_scheduled_invitations();
+                }
+                ?>
             </div>
             
 

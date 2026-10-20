@@ -40,6 +40,9 @@ class Kiyoh_Activator {
         // Schedule cron events
         self::schedule_cron_events();
 
+        // Put any send-time jobs back after a deactivate/reactivate cycle.
+        self::reschedule_pending_invitations();
+
         // Put stored Kiyoh reviews and ministars back without an API wait.
         self::restore_stored_reviews();
         
@@ -169,6 +172,9 @@ class Kiyoh_Activator {
             'invitations' => array(
                 'trigger_status' => array('completed'),
                 'delay_days' => 3,
+                'send_time_enabled' => false,
+                'send_time' => '',
+                'send_weekdays' => array(),
                 'invitation_type' => 'shop_and_product',
                 'max_products' => 5,
                 'product_sort_order' => 'cart_order',
@@ -214,6 +220,26 @@ class Kiyoh_Activator {
 
         if (!wp_next_scheduled('kiyoh_sync_product_ratings')) {
             wp_schedule_event(time(), 'hourly', 'kiyoh_sync_product_ratings');
+        }
+    }
+
+    /**
+     * Recreate Action Scheduler jobs for invitations still marked scheduled.
+     * Deactivation cancels those jobs so they cannot run while the plugin is off.
+     */
+    private static function reschedule_pending_invitations() {
+        $schedule_class = KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-schedule.php';
+        $manager_class = KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-manager.php';
+
+        if (!class_exists('Kiyoh_Invitation_Schedule') && file_exists($schedule_class)) {
+            require_once $schedule_class;
+        }
+        if (!class_exists('Kiyoh_Invitation_Manager') && file_exists($manager_class)) {
+            require_once $manager_class;
+        }
+
+        if (class_exists('Kiyoh_Invitation_Manager')) {
+            Kiyoh_Invitation_Manager::queue_outstanding_schedules();
         }
     }
 }

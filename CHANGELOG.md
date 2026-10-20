@@ -1,5 +1,17 @@
 # Changelog
 
+## v1.2.0
+
+### Added
+- **Optional time of day for review invitations.** On **WooCommerce → Kiyoh → Invitations**, turn on **Preferred send time**, set an HH:MM time in the shop timezone (Settings → General), and optionally limit the weekdays. After the existing delay in days, the plugin waits until the next allowed day and time, then asks Kiyoh to send immediately.
+- **Pending scheduled invitations** are listed on the Invitations tab (order, customer, shop-local send time, status). The order note and the PHP error log record scheduling, sending, skips, and failures.
+- The Kiyoh invite API (`POST /v1/invite/external`) still only accepts a whole-day `delay`. It has no send-at datetime, so the clock time is handled in the plugin with WooCommerce Action Scheduler. The API is called with `delay: 0` when the job runs.
+
+### Notes
+- Leave **Preferred send time** off, or leave the time empty, and nothing changes: the plugin still calls Kiyoh as soon as the order hits a trigger status and passes `delay_days` (default 3).
+- Before a scheduled invite is sent, the order is checked again. Cancelled, refunded, failed, or trashed orders are skipped, as are excluded customers and orders that already have a sent invite. Running the job twice does not send twice.
+- Action Scheduler uses WP-Cron unless the shop has a real server cron. On a low-traffic site the email can arrive late. A send is not more precise than the cron interval.
+
 ## v1.1.4
 
 ### Fixed

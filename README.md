@@ -123,6 +123,7 @@ In the **Review Invitation Settings** section:
 **Basic Settings:**
 - **Trigger Order Status**: Select when to send invitations (usually "Completed")
 - **Invitation Delay (Days)**: How many days to wait before sending
+- **Preferred send time** (optional): Send at a specific time of day in your shop timezone, after the delay. You can also limit the weekdays (for example weekdays only). Leave this off to keep the previous behaviour, where Kiyoh receives the delay in whole days and chooses the time. The Invitations tab lists invitations that are waiting for that time.
 - **Invitation Type**: Choose what to request:
   - **Shop + Product Reviews**: Ask for both store and product reviews (recommended)
   - **Product Reviews Only**: Only ask for product reviews
@@ -161,7 +162,7 @@ Once configured, the plugin works automatically:
 
 1. **Customer Places Order**: A customer completes a purchase
 2. **Order is Completed**: You mark the order as "Completed" (or your configured status)
-3. **Waiting Period**: The system waits the configured delay (e.g., 7 days)
+3. **Waiting Period**: The system waits the configured delay (e.g., 7 days). If you set a preferred send time, it then waits until that time on an allowed day.
 4. **Review Request Sent**: Customer receives an email from Kiyoh/Klantenvertellen
 5. **Customer Leaves Review**: Customer clicks the link and writes a review
 6. **Review Published**: Review appears on your Kiyoh profile and can be displayed on your website
@@ -226,6 +227,7 @@ The plugin supports 25+ languages including:
 - Verify trigger statuses are configured
 - Check if customers are in excluded groups
 - Ensure API connection is working
+- If a preferred send time is set, open **WooCommerce → Kiyoh → Invitations** and check the scheduled-invitations list. The send runs when WordPress cron or Action Scheduler runs, so a quiet shop can be late unless a real server cron calls `wp-cron.php`. Cancelling or refunding the order before that time skips the invite.
 
 **Bulk sync stuck or failed:**
 - **Do not refresh or leave the page during bulk sync**
@@ -239,11 +241,11 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.0.0  
+**Version**: 1.2.0  
 **Compatibility**: WordPress 5.8+ with WooCommerce 5.0+  
 **Developer**: Kiyoh  
 **License**: Proprietary
-**Last Updated**: October 2025  
+**Last Updated**: October 2026  
 
 ## Support
 
