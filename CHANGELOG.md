@@ -11,6 +11,7 @@
 - Leave **Preferred send time** off, or leave the time empty, and nothing changes: the plugin still calls Kiyoh as soon as the order hits a trigger status and passes `delay_days` (default 3).
 - Before a scheduled invite is sent, the order is checked again. Cancelled, refunded, failed, or trashed orders are skipped, as are excluded customers and orders that already have a sent invite. Running the job twice does not send twice.
 - Action Scheduler uses WP-Cron unless the shop has a real server cron. On a low-traffic site the email can arrive late. A send is not more precise than the cron interval.
+- `kiyoh_api_base_url` can replace the API host (the default remains `https://www.kiyoh.com` or `https://www.klantenvertellen.nl`). Live shops should leave the filter alone.
 
 ## v1.1.4
 
