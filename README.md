@@ -243,7 +243,7 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.2.0  
+**Version**: 1.2.1  
 **Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary

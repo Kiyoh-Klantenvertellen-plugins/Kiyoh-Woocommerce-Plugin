@@ -4,7 +4,7 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.2.0
+Stable tag: 1.2.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
@@ -31,7 +31,7 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 
 == Changelog ==
 
-= Unreleased =
+= 1.2.1 =
 * Tested up to WordPress 7.1.3 and WooCommerce 11.2.1.
 * Requires PHP 8.2.
 * Declared compatible with High-Performance Order Storage and the Cart and Checkout blocks.

@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.2.1
 
 ### Changed
 - Plugin headers and `readme.txt` now record compatibility with WordPress 7.1.3 and WooCommerce 11.2.1. Requires PHP 8.2.
