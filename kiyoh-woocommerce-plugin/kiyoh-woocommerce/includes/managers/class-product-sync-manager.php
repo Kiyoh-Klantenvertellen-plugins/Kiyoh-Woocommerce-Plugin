@@ -458,10 +458,13 @@ class Kiyoh_Product_Sync_Manager {
     }
 
     private function get_product_gtin($product) {
-        // Check WooCommerce built-in GTIN field first (Product → Inventory → "GTIN, UPC, EAN, or ISBN")
-        $global_unique_id = $product->get_global_unique_id();
-        if (!empty($global_unique_id)) {
-            return $global_unique_id;
+        // WooCommerce 9.2+ Inventory field "GTIN, UPC, EAN, or ISBN".
+        // Guarded so shops still on the stated minimum (WooCommerce 5.0) do not fatal.
+        if (is_callable(array($product, 'get_global_unique_id'))) {
+            $global_unique_id = $product->get_global_unique_id();
+            if (!empty($global_unique_id)) {
+                return $global_unique_id;
+            }
         }
 
         // Check for GTIN in various meta fields
@@ -663,8 +666,18 @@ class Kiyoh_Product_Sync_Manager {
             FROM {$table_name}
         ");
 
+        if (!$stats) {
+            $stats = (object) array(
+                'total_synced' => 0,
+                'successful' => 0,
+                'errors' => 0,
+                'last_sync_time' => null,
+            );
+        }
+
         // Get total products count
-        $total_products = wp_count_posts('product')->publish;
+        $counts = wp_count_posts('product');
+        $total_products = ($counts && isset($counts->publish)) ? (int) $counts->publish : 0;
 
         return array(
             'total_products' => $total_products,

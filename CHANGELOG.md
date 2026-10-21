@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Plugin headers and `readme.txt` now record compatibility with WordPress 7.1.3 and WooCommerce 11.2.1. Requires PHP 8.2.
+- Declared compatibility with the Cart and Checkout blocks, alongside the existing High-Performance Order Storage declaration. Review invites still use `woocommerce_order_status_changed`, which both classic checkout and the Checkout block fire.
+- Order status handling reloads the order through `wc_get_order` when WooCommerce does not pass an order object, so invites stay on the order CRUD API under HPOS.
+- The WooCommerce 9.2 GTIN helper is only called when it exists, so product sync does not fatal on the stated WooCommerce 5.0 minimum.
+- Invitation and product-sync statistics no longer read properties on a missing database row (PHP 8 warning).
+
 ## v1.2.0
 
 ### Added

@@ -11,10 +11,10 @@
  * Text Domain: kiyoh-woocommerce
  * Domain Path: /languages
  * Requires at least: 5.8
- * Tested up to: 6.4
- * Requires PHP: 7.4
+ * Tested up to: 7.1.3
+ * Requires PHP: 8.2
  * WC requires at least: 5.0
- * WC tested up to: 8.0
+ * WC tested up to: 11.2.1
  */
 
 // If this file is called directly, abort.
@@ -123,10 +123,16 @@ function kiyoh_woocommerce_init() {
 add_action('plugins_loaded', 'kiyoh_woocommerce_init');
 
 /**
- * Declare WooCommerce HPOS compatibility
+ * Declare WooCommerce feature compatibility.
+ *
+ * Orders are read through WooCommerce CRUD (wc_get_order and order objects),
+ * including under High-Performance Order Storage. Review invites are sent from
+ * woocommerce_order_status_changed, which classic checkout and the Checkout
+ * block both fire. This plugin does not replace cart or checkout markup.
  */
 add_action('before_woocommerce_init', function() {
     if (class_exists('\Automattic\WooCommerce\Utilities\FeaturesUtil')) {
         \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('custom_order_tables', __FILE__, true);
+        \Automattic\WooCommerce\Utilities\FeaturesUtil::declare_compatibility('cart_checkout_blocks', __FILE__, true);
     }
 });
