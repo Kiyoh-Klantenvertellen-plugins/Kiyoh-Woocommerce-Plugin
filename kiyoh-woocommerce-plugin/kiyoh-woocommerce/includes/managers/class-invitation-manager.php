@@ -296,15 +296,30 @@ class Kiyoh_Invitation_Manager {
             foreach ($order->get_items() as $item) {
                 try {
                     $total_items++;
-                    $product = $item->get_product();
+                    $purchased = $item->get_product();
+                    $product = $this->catalog_product_for_order_item($item);
                     if (!$product) {
                         continue;
                     }
 
-                    // Use the actual purchased product SKU from the order item, not the loaded product
-                    // This ensures we get the specific variant that was purchased
-                    $raw_sku = $item->get_meta('_sku') ?: $product->get_sku();
+                    // With "Send parent product code for variations" on, a variation
+                    // is invited as its parent, so the line SKU (the variation) is ignored.
+                    // Otherwise, and for simple products, keep the purchased line SKU.
+                    $use_parent_code = $purchased
+                        && is_a($purchased, 'WC_Product')
+                        && $purchased->is_type('variation')
+                        && Kiyoh_Product_Sync_Manager::send_parent_product_code();
+                    if ($use_parent_code) {
+                        $raw_sku = $product->get_sku();
+                    } else {
+                        $raw_sku = $item->get_meta('_sku') ?: $product->get_sku();
+                    }
                     if (!$raw_sku) {
+                        if ($use_parent_code) {
+                            error_log("Kiyoh Invitation: Order {$order->get_id()} parent product {$product->get_id()} has no SKU - skipping");
+                        } else {
+                            error_log("Kiyoh Invitation: Order {$order->get_id()} product {$product->get_id()} has no SKU - skipping");
+                        }
                         continue;
                     }
 
@@ -416,6 +431,7 @@ class Kiyoh_Invitation_Manager {
 
             // Use the product sync manager for consistency
             $product_sync_manager = new Kiyoh_Product_Sync_Manager();
+            $synced_parents = array();
 
             foreach ($order->get_items() as $item) {
                 if ($synced_count >= $max_products) {
@@ -423,12 +439,18 @@ class Kiyoh_Invitation_Manager {
                 }
 
                 try {
-                    $product = $item->get_product();
+                    $product = $this->catalog_product_for_order_item($item);
                     if (!$product) {
                         continue;
                     }
 
-                    $success = $product_sync_manager->sync_single_product($product->get_id());
+                    $catalog_id = $product->get_id();
+                    if (isset($synced_parents[$catalog_id])) {
+                        continue;
+                    }
+                    $synced_parents[$catalog_id] = true;
+
+                    $success = $product_sync_manager->sync_single_product($catalog_id);
                     
                     if ($success) {
                         $synced_count++;
@@ -450,6 +472,46 @@ class Kiyoh_Invitation_Manager {
     }
 
 
+
+    /**
+     * Line product, or its parent when "Send parent product code for variations"
+     * is on. A variation with no parent is skipped only while that setting is on.
+     *
+     * @param WC_Order_Item_Product $item
+     * @return WC_Product|null
+     */
+    private function catalog_product_for_order_item($item) {
+        if (!is_object($item) || !method_exists($item, 'get_product')) {
+            return null;
+        }
+
+        $product = $item->get_product();
+        if (!$product || !is_a($product, 'WC_Product')) {
+            return null;
+        }
+
+        if (!class_exists('Kiyoh_Product_Sync_Manager')) {
+            return $product->is_type('variation') ? null : $product;
+        }
+
+        $catalog_id = Kiyoh_Product_Sync_Manager::catalog_product_id($product->get_id());
+        if ($catalog_id <= 0) {
+            error_log("Kiyoh Invitation: Variation {$product->get_id()} has no parent product - skipping");
+            return null;
+        }
+
+        if ($catalog_id === (int) $product->get_id()) {
+            return $product;
+        }
+
+        $catalog = wc_get_product($catalog_id);
+        if (!$catalog || !is_a($catalog, 'WC_Product')) {
+            error_log("Kiyoh Invitation: Parent product {$catalog_id} for variation {$product->get_id()} could not be loaded - skipping");
+            return null;
+        }
+
+        return $catalog;
+    }
 
     private function sync_order_products_before_invitation($order, $product_codes) {
         if (empty($this->settings['product_sync']['auto_sync'])) {

@@ -130,6 +130,16 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
                             <p class="description"><?php _e('Automatically sync products when they are created or updated', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="send_parent_product_code"><?php esc_html_e('Send parent product code for variations', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <input type="checkbox" id="send_parent_product_code" name="kiyoh_woocommerce_settings[product_sync][send_parent_product_code]" value="1" <?php checked(!empty($settings['product_sync']['send_parent_product_code']), true); ?> />
+                            <p class="description"><?php esc_html_e('Off by default. When on, invitations and product sync use the parent variable product and its SKU. Two variations of the same parent count as one product. A parent with no SKU is skipped. When off, each purchased variation keeps its own SKU.', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
                     
                     <tr>
                         <th scope="row">

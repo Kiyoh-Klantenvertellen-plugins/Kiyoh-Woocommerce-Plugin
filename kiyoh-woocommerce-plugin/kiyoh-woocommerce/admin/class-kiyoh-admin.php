@@ -218,6 +218,19 @@ class Kiyoh_Admin {
         );
 
         add_settings_field(
+            'send_parent_product_code',
+            __('Send parent product code for variations', 'kiyoh-woocommerce'),
+            array($this, 'checkbox_field_callback'),
+            'kiyoh-settings',
+            'kiyoh_product_sync_section',
+            array(
+                'name' => 'kiyoh_woocommerce_settings[product_sync][send_parent_product_code]',
+                'value' => $this->get_option('product_sync', 'send_parent_product_code', false),
+                'description' => __('Off by default. When on, invitations and product sync use the parent variable product and its SKU. A parent with no SKU is skipped.', 'kiyoh-woocommerce')
+            )
+        );
+
+        add_settings_field(
             'excluded_types',
             __('Excluded Product Types', 'kiyoh-woocommerce'),
             array($this, 'multiselect_field_callback'),
@@ -512,6 +525,7 @@ class Kiyoh_Admin {
         if (isset($input['product_sync'])) {
             $sanitized['product_sync'] = array(
                 'auto_sync' => !empty($input['product_sync']['auto_sync']),
+                'send_parent_product_code' => !empty($input['product_sync']['send_parent_product_code']),
                 'excluded_types' => array_map('sanitize_text_field', (array) ($input['product_sync']['excluded_types'] ?? array())),
                 'excluded_codes' => sanitize_textarea_field($input['product_sync']['excluded_codes'] ?? '')
             );

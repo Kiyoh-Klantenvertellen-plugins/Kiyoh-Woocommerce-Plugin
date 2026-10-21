@@ -165,6 +165,7 @@ class Kiyoh_Activator {
             ),
             'product_sync' => array(
                 'auto_sync' => true,
+                'send_parent_product_code' => false,
                 'excluded_types' => array(),
                 'excluded_codes' => '',
                 'sync_fields' => array('product_name', 'product_code', 'url', 'image', 'brand', 'sku', 'gtin', 'mpn'),
