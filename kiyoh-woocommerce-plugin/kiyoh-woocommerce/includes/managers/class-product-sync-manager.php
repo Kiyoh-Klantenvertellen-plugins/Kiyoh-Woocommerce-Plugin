@@ -458,7 +458,7 @@ class Kiyoh_Product_Sync_Manager {
     }
 
     private function get_product_gtin($product) {
-        // WooCommerce 9.1+ Inventory field "GTIN, UPC, EAN, or ISBN".
+        // WooCommerce 9.2+ Inventory field "GTIN, UPC, EAN, or ISBN".
         // Guarded so shops still on the stated minimum (WooCommerce 5.0) do not fatal.
         if (is_callable(array($product, 'get_global_unique_id'))) {
             $global_unique_id = $product->get_global_unique_id();
