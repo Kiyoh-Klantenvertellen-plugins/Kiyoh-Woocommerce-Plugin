@@ -20,18 +20,20 @@ Kiyoh Reviews is a WooCommerce plugin that automatically collects customer revie
 ### Minimum Requirements
 - **WordPress**: 5.8 or higher
 - **WooCommerce**: 5.0 or higher
-- **PHP**: 7.4 or higher
+- **PHP**: 8.2 or higher
 - **Server Extensions**: cURL, JSON (usually pre-installed)
 
 ### Recommended for Best Performance
-- **WordPress**: 6.8 or higher (latest version)
-- **WooCommerce**: 10.0 or higher
-- **PHP**: 8.1 or higher
+- **WordPress**: 7.1.3 (tested)
+- **WooCommerce**: 11.2.1 (tested), with High-Performance Order Storage and the Checkout block
+- **PHP**: 8.2 or higher
 - **SSL Certificate**: For secure API communication
 
 ### Compatibility
 The plugin is compatible with:
 - ✅ WordPress 5.8+ with WooCommerce 5.0+
+- ✅ Tested up to WordPress 7.1.3 and WooCommerce 11.2.1
+- ✅ High-Performance Order Storage (HPOS) and Cart & Checkout blocks
 - ✅ All standard WordPress installations
 - ✅ Multi-site installations
 - ✅ WPML and Polylang (multilingual sites)
@@ -242,7 +244,7 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 ## About This Plugin
 
 **Version**: 1.2.0  
-**Compatibility**: WordPress 5.8+ with WooCommerce 5.0+  
+**Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary
 **Last Updated**: October 2026  

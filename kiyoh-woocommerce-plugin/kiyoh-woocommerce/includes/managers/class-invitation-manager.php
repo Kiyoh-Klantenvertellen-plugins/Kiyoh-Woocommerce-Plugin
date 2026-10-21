@@ -44,7 +44,13 @@ class Kiyoh_Invitation_Manager {
                !empty($this->settings['invitations']['trigger_status']);
     }
 
-    public function handle_order_status_change($order_id, $old_status, $new_status, $order) {
+    public function handle_order_status_change($order_id, $old_status, $new_status, $order = null) {
+        // HPOS and the Checkout block pass a WC_Order. Fall back to the CRUD
+        // loader so a missing object is never read as a shop_order post.
+        if (!$order instanceof WC_Order) {
+            $order = function_exists('wc_get_order') ? wc_get_order($order_id) : null;
+        }
+
         error_log("Kiyoh Invitation: Order {$order_id} status changed from {$old_status} to {$new_status}");
 
         $trigger_statuses = $this->get_trigger_statuses();
@@ -652,6 +658,16 @@ class Kiyoh_Invitation_Manager {
                 MAX(sent_at) as last_sent_time
             FROM {$table_name}
         ");
+
+        if (!$stats) {
+            return array(
+                'total_invitations' => 0,
+                'sent' => 0,
+                'errors' => 0,
+                'last_sent_time' => null,
+                'success_rate' => 0
+            );
+        }
 
         return array(
             'total_invitations' => $stats->total_invitations ?: 0,
