@@ -43,7 +43,63 @@ class Kiyoh_Product_Sync_Manager {
         $this->sync_single_product($product_id);
     }
 
+    /**
+     * Whether invitations and product sync should use the parent variable product.
+     * Off unless the merchant turns on "Send parent product code for variations".
+     *
+     * @return bool
+     */
+    public static function send_parent_product_code() {
+        $settings = get_option('kiyoh_woocommerce_settings', array());
+        return !empty($settings['product_sync']['send_parent_product_code']);
+    }
+
+    /**
+     * Catalog product Kiyoh should store. With the parent-code setting off, this
+     * is the product itself (master behaviour, including variation SKUs). With
+     * the setting on, a variation is its parent variable product. Returns 0
+     * when that variation has no parent, so callers skip it.
+     *
+     * @param int $product_id
+     * @return int
+     */
+    public static function catalog_product_id($product_id) {
+        $product_id = (int) $product_id;
+        if ($product_id <= 0 || !self::send_parent_product_code() || !function_exists('wc_get_product')) {
+            return $product_id;
+        }
+
+        $product = wc_get_product($product_id);
+        if (!$product || !is_a($product, 'WC_Product') || !$product->is_type('variation')) {
+            return $product_id;
+        }
+
+        return (int) $product->get_parent_id();
+    }
+
+    /**
+     * @param int[] $product_ids
+     * @return int[]
+     */
+    private function unique_catalog_product_ids($product_ids) {
+        $ids = array();
+        foreach ((array) $product_ids as $product_id) {
+            $catalog_id = self::catalog_product_id($product_id);
+            if ($catalog_id > 0) {
+                $ids[$catalog_id] = $catalog_id;
+            }
+        }
+
+        return array_values($ids);
+    }
+
     public function sync_single_product($product_id) {
+        $product_id = self::catalog_product_id($product_id);
+        if ($product_id <= 0) {
+            error_log('Kiyoh Product Sync: Variation has no parent product - skipping');
+            return false;
+        }
+
         try {
             if (!$this->should_sync_product($product_id)) {
                 error_log("Kiyoh Product Sync: Product {$product_id} excluded from sync");
@@ -80,7 +136,8 @@ class Kiyoh_Product_Sync_Manager {
     }
 
     public function bulk_sync_products($filters = array()) {
-        $products = $this->get_products_for_sync($filters);
+        // Same catalog ids as a single sync. Parent remap runs only when the setting is on.
+        $products = $this->unique_catalog_product_ids($this->get_products_for_sync($filters));
         $results = array(
             'total' => count($products),
             'synced' => 0,
@@ -239,6 +296,12 @@ class Kiyoh_Product_Sync_Manager {
     }
 
     private function should_sync_product($product_id) {
+        $product_id = self::catalog_product_id($product_id);
+        if ($product_id <= 0) {
+            error_log('Kiyoh Product Sync: Variation has no parent product - skipping');
+            return false;
+        }
+
         $product = wc_get_product($product_id);
         if (!$product) {
             error_log("Kiyoh Product Sync: Product {$product_id} not found");
@@ -249,7 +312,11 @@ class Kiyoh_Product_Sync_Manager {
         $sku = $product->get_sku();
         $name = $product->get_name();
         if (!$sku || !$name || trim($sku) === '' || trim($name) === '') {
-            error_log("Kiyoh Product Sync: Product {$product_id} missing SKU ('{$sku}') or name ('{$name}') - skipping");
+            if ($product->is_type('variable') && (!$sku || trim((string) $sku) === '')) {
+                error_log("Kiyoh Product Sync: Parent product {$product_id} has no SKU - skipping");
+            } else {
+                error_log("Kiyoh Product Sync: Product {$product_id} missing SKU ('{$sku}') or name ('{$name}') - skipping");
+            }
             return false;
         }
 
@@ -272,6 +339,11 @@ class Kiyoh_Product_Sync_Manager {
     }
 
     private function extract_product_data($product_id) {
+        $product_id = self::catalog_product_id($product_id);
+        if ($product_id <= 0) {
+            return false;
+        }
+
         $product = wc_get_product($product_id);
         if (!$product) {
             return false;
@@ -530,6 +602,8 @@ class Kiyoh_Product_Sync_Manager {
 
     private function get_products_for_sync($filters = array()) {
         $args = array(
+            // Variations are a separate post type. They are synced as their
+            // variable parent, which is a `product` post, same as invites.
             'post_type' => 'product',
             'post_status' => 'publish',
             'posts_per_page' => -1,
@@ -620,8 +694,8 @@ class Kiyoh_Product_Sync_Manager {
         );
 
         $query = new WP_Query($args);
-        $products = $query->posts;
-        $total_products = $query->found_posts;
+        $products = $this->unique_catalog_product_ids($query->posts);
+        $total_products = (int) $query->found_posts;
 
         $results = array(
             'batch_synced' => 0,

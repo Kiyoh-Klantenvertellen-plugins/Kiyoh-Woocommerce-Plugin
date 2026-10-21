@@ -9,6 +9,9 @@
 - The WooCommerce 9.2 GTIN helper is only called when it exists, so product sync does not fatal on the stated WooCommerce 5.0 minimum.
 - Invitation and product-sync statistics no longer read properties on a missing database row (PHP 8 warning).
 
+### Added
+- **Send parent product code for variations** on WooCommerce → Kiyoh → Product Sync. Off by default, so invitations and sync keep using the purchased variation SKU. When on, invites, the order-time product sync, and bulk sync use the parent variable product and its SKU. Two variations of the same parent count as one product. A parent with no SKU is skipped and logged.
+
 ## v1.2.0
 
 ### Added

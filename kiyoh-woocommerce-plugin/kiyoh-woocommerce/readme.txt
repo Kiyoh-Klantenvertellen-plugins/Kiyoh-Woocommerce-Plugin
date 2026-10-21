@@ -35,6 +35,7 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 * Tested up to WordPress 7.1.3 and WooCommerce 11.2.1.
 * Requires PHP 8.2.
 * Declared compatible with High-Performance Order Storage and the Cart and Checkout blocks.
+* Optional "Send parent product code for variations" setting, off by default. When on, invitations and sync use the parent product. A parent with no SKU is skipped.
 
 = 1.2.0 =
 * Optional preferred send time for review invitations, queued with Action Scheduler.
