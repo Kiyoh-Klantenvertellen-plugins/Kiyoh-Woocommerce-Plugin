@@ -201,6 +201,19 @@ class Kiyoh_Admin {
                 'description' => __('Your API key from your Kiyoh/Klantenvertellen account', 'kiyoh-woocommerce')
             )
         );
+
+        add_settings_field(
+            'mobile_urls',
+            __('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'),
+            array($this, 'text_field_callback'),
+            'kiyoh-settings',
+            'kiyoh_general_section',
+            array(
+                'name' => 'kiyoh_woocommerce_settings[general][mobile_urls]',
+                'value' => $this->get_option('general', 'mobile_urls', ''),
+                'description' => __('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to use the default https://kiyoh-mobile.com. Example with staging: https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app', 'kiyoh-woocommerce')
+            )
+        );
     }
 
     private function register_product_sync_fields() {
@@ -514,11 +527,22 @@ class Kiyoh_Admin {
         $sanitized = array();
 
         if (isset($input['general'])) {
+            $existing_settings = get_option('kiyoh_woocommerce_settings', array());
+            $previous_urls = '';
+            if (is_array($existing_settings) && isset($existing_settings['general']['mobile_urls'])) {
+                $previous_urls = $existing_settings['general']['mobile_urls'];
+            }
+            $mobile_urls = $previous_urls;
+            if (is_array($input['general']) && array_key_exists('mobile_urls', $input['general'])) {
+                $mobile_urls = sanitize_text_field($input['general']['mobile_urls']);
+            }
+
             $sanitized['general'] = array(
                 'enabled' => !empty($input['general']['enabled']),
                 'platform' => sanitize_text_field($input['general']['platform'] ?? ''),
                 'location_id' => sanitize_text_field($input['general']['location_id'] ?? ''),
-                'api_key' => sanitize_text_field($input['general']['api_key'] ?? '')
+                'api_key' => sanitize_text_field($input['general']['api_key'] ?? ''),
+                'mobile_urls' => $mobile_urls,
             );
         }
 
@@ -913,34 +937,59 @@ class Kiyoh_Admin {
     public static function test_api_connection() {
         try {
             if (!Kiyoh_Api_Factory::is_configured()) {
-                return array(
+                $result = array(
                     'success' => false,
                     'message' => 'API not configured. Please set API token and location ID.'
                 );
-            }
-
-            $client = Kiyoh_Api_Factory::create_client();
-            $response = $client->get_company_stats();
-
-            if ($response->is_success()) {
-                $data = $response->get_data();
-                return array(
-                    'success' => true,
-                    'message' => 'API connection successful',
-                    'stats' => $data
-                );
             } else {
-                return array(
-                    'success' => false,
-                    'message' => 'API connection failed: ' . $response->get_error(),
-                    'error_code' => $response->get_error_code()
-                );
+                $client = Kiyoh_Api_Factory::create_client();
+                $response = $client->get_company_stats();
+
+                if ($response->is_success()) {
+                    $data = $response->get_data();
+                    $result = array(
+                        'success' => true,
+                        'message' => 'API connection successful',
+                        'stats' => $data,
+                        'http_status' => $response->get_response_code(),
+                    );
+                } else {
+                    $result = array(
+                        'success' => false,
+                        'message' => 'API connection failed: ' . $response->get_error(),
+                        'error_code' => $response->get_error_code(),
+                        'http_status' => $response->get_response_code(),
+                    );
+                }
             }
         } catch (Exception $e) {
-            return array(
+            $result = array(
                 'success' => false,
                 'message' => 'Test failed: ' . $e->getMessage()
             );
+        }
+
+        self::report_connection_health($result);
+        return $result;
+    }
+
+    /**
+     * A failed health report must not turn a connection test into an error.
+     *
+     * @param array $result
+     */
+    private static function report_connection_health($result) {
+        try {
+            if (!class_exists('Kiyoh_Mobile_Health_Reporter')) {
+                return;
+            }
+            Kiyoh_Mobile_Health_Reporter::instance()->note_connection_test(
+                !empty($result['success']),
+                isset($result['message']) ? $result['message'] : null,
+                isset($result['http_status']) ? $result['http_status'] : null
+            );
+        } catch (Throwable $e) {
+            error_log('Kiyoh Mobile Health: connection note failed: ' . $e->getMessage());
         }
     }
 

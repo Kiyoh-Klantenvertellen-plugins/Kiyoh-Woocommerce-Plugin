@@ -56,7 +56,7 @@ class Kiyoh_Plugin {
         if (defined('KIYOH_WOOCOMMERCE_VERSION')) {
             $this->version = KIYOH_WOOCOMMERCE_VERSION;
         } else {
-            $this->version = '1.2.1';
+            $this->version = '1.3.0';
         }
         $this->plugin_name = 'kiyoh-woocommerce';
 
@@ -104,6 +104,8 @@ class Kiyoh_Plugin {
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-schedule.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health-reporter.php';
 
         $this->loader = new Kiyoh_Loader();
     }
@@ -132,6 +134,12 @@ class Kiyoh_Plugin {
         // Add cron hooks
         $this->loader->add_action('kiyoh_process_scheduled_invitations', $this, 'process_scheduled_invitations');
         $this->loader->add_action('kiyoh_cleanup_cache', $this, 'cleanup_cache');
+
+        $health_reporter = Kiyoh_Mobile_Health_Reporter::instance();
+        $this->loader->add_action('init', $health_reporter, 'ensure_cron');
+        $this->loader->add_action(Kiyoh_Mobile_Health::CRON_HOOK, $health_reporter, 'on_daily_cron');
+        $this->loader->add_action('update_option_kiyoh_woocommerce_settings', $health_reporter, 'on_settings_updated', 10, 3);
+        $this->loader->add_action('add_option_kiyoh_woocommerce_settings', $health_reporter, 'on_settings_added', 10, 2);
     }
 
     /**

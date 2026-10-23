@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.3.0
+
+### Added
+- **Kiyoh Mobile shop health.** The plugin posts to `POST {url}/api/integrations/health` for each base URL in **WooCommerce → Kiyoh → General → Kiyoh Mobile URL(s)** (comma-separated). Leave the field blank to use the `KIYOH_MOBILE_URLS` constant, which defaults to `https://kiyoh-mobile.com`. The `kiyoh_mobile_urls` filter overrides both. Add `https://kiyohmobileui-staging.up.railway.app` when a shop should also report to staging.
+- Headers are `X-Publication-Api-Token` and `X-Location-Id` from the saved API key and Location ID. The body uses `platform=woocommerce`, `shopId` set to the site domain, and `pluginVersion`. Groups are `connection`, `invites` (`lastOkAt`, `failures24h`), `productSync` (including up to 500 product codes), and `widget` (`injected` when Kiyoh ministars are active).
+- A report is queued when settings are saved, credentials change, the connection test finishes, an invite is sent or fails, or products are synced. Those events share one HTTP call per URL at the end of the request. A daily WP-Cron event (`kiyoh_report_mobile_health`) sends again when the payload changed or the last success is older than 24 hours, so the server heartbeat stays inside the 48-hour stale window.
+- The call is `wp_remote_post` with a 2-second timeout. HTTP 429 stores `Retry-After` (or `retryAfterSeconds`) and does not retry until that time. A health failure is logged and does not change invite or checkout behaviour. Reports are skipped when the API key or Location ID is missing. Clearing credentials stops the heartbeat; Kiyoh Mobile then shows the shop as stale after 48 hours.
+
 ## v1.2.1
 
 ### Changed
