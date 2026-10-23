@@ -99,6 +99,16 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
                             <p class="description"><?php _e('Your API key from your Kiyoh/Klantenvertellen account', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="mobile_urls"><?php esc_html_e('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <input type="text" id="mobile_urls" name="kiyoh_woocommerce_settings[general][mobile_urls]" value="<?php echo esc_attr(isset($settings['general']['mobile_urls']) ? $settings['general']['mobile_urls'] : ''); ?>" class="regular-text" />
+                            <p class="description"><?php esc_html_e('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to use the default https://kiyoh-mobile.com. Example with staging: https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
                     
                     <tr>
                         <th scope="row">

@@ -62,6 +62,7 @@ class Kiyoh_Deactivator {
         }
         wp_clear_scheduled_hook('kiyoh_sync_product_ratings');
         wp_clear_scheduled_hook('kiyoh_process_rating_sync');
+        wp_clear_scheduled_hook('kiyoh_report_mobile_health');
 
         // Stop send-time jobs while the plugin is inactive. Rows stay scheduled
         // and are queued again on the next activation.
