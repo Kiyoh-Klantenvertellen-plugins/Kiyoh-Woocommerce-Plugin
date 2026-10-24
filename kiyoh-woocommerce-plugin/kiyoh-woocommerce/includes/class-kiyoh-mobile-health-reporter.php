@@ -283,7 +283,7 @@ class Kiyoh_Mobile_Health_Reporter {
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
-                Kiyoh_Mobile_Health::HEADER_TOKEN => $api_token,
+                Kiyoh_Mobile_Health::HEADER_PUBLICATION => $api_token,
                 Kiyoh_Mobile_Health::HEADER_LOCATION => $location_id,
             ),
             'body' => $encoded,

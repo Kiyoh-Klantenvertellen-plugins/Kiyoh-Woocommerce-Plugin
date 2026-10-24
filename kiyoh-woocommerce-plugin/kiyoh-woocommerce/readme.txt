@@ -4,7 +4,7 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.3.0
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
@@ -25,11 +25,24 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 == Installation ==
 
 1. Upload the plugin to `/wp-content/plugins/kiyoh-woocommerce/` and activate it. WooCommerce must be active. PHP 8.2 or newer is required.
-2. Open WooCommerce → Kiyoh and enter the Location ID and API key.
-3. Save, then run Bulk Sync Products once.
-4. Choose the order status that should send a review invitation.
+2. Open WooCommerce → Kiyoh. Click **Connect with Kiyoh / Klantenvertellen**, or enter the Location ID and API key for an existing install.
+3. Connect needs `KIYOH_CONNECT_HMAC_KEY` and `KIYOH_CONNECT_CLIENT_SECRET` in `wp-config.php`. Those secrets are not in this plugin.
+4. Save, then run Bulk Sync Products once.
+5. Choose the order status that should send a review invitation.
+
+== Permissions and data ==
+
+* Settings, Connect, disconnect, the connection test, and sync require `manage_woocommerce`.
+* The plugin stores the Location ID, invite API key, invitation rules, product-sync rows, a review cache, and an encrypted Connect refresh token.
+* Deactivate keeps that data and stops scheduled jobs. Delete removes options, tables, cron, and transients, and revokes the shop at Kiyoh-Connect.
 
 == Changelog ==
+
+= 1.4.0 =
+* Connect with Kiyoh / Klantenvertellen via Kiyoh-Connect (per-shop return to /wp-json/kiyoh/v1/oauth/callback). The manual Location ID and API key remain for existing installs.
+* Connect HMAC key and client secret are read from wp-config.php or the environment. They are not shipped in the plugin.
+* Uninstall removes plugin data and revokes the Connect shop. Deactivate keeps settings and tokens.
+* Remaining direct SQL uses whitelisted table names and $wpdb->prepare for values.
 
 = 1.3.0 =
 * Shop health is reported to Kiyoh Mobile (connection, invites, product sync, ministars).

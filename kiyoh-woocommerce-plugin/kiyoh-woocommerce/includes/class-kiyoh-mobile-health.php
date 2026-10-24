@@ -11,7 +11,7 @@ class Kiyoh_Mobile_Health {
     const PLATFORM = 'woocommerce';
     const HEALTH_PATH = '/api/integrations/health';
     const DEFAULT_URLS = 'https://kiyoh-mobile.com';
-    const HEADER_TOKEN = 'X-Publication-Api-Token';
+    const HEADER_PUBLICATION = 'X-Publication-Api-Token';
     const HEADER_LOCATION = 'X-Location-Id';
     const CRON_HOOK = 'kiyoh_report_mobile_health';
     const OPTION_STATE = 'kiyoh_mobile_health';

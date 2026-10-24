@@ -56,7 +56,7 @@ class Kiyoh_Plugin {
         if (defined('KIYOH_WOOCOMMERCE_VERSION')) {
             $this->version = KIYOH_WOOCOMMERCE_VERSION;
         } else {
-            $this->version = '1.3.0';
+            $this->version = '1.4.0';
         }
         $this->plugin_name = 'kiyoh-woocommerce';
 
@@ -104,8 +104,11 @@ class Kiyoh_Plugin {
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-schedule.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-db.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health-reporter.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-connect.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-connect-session.php';
 
         $this->loader = new Kiyoh_Loader();
     }
@@ -140,6 +143,10 @@ class Kiyoh_Plugin {
         $this->loader->add_action(Kiyoh_Mobile_Health::CRON_HOOK, $health_reporter, 'on_daily_cron');
         $this->loader->add_action('update_option_kiyoh_woocommerce_settings', $health_reporter, 'on_settings_updated', 10, 3);
         $this->loader->add_action('add_option_kiyoh_woocommerce_settings', $health_reporter, 'on_settings_added', 10, 2);
+
+        $this->loader->add_action('rest_api_init', 'Kiyoh_Connect_Session', 'register_routes');
+        $this->loader->add_action('wp_ajax_kiyoh_connect_start', 'Kiyoh_Connect_Session', 'handle_start');
+        $this->loader->add_action('wp_ajax_kiyoh_connect_disconnect', 'Kiyoh_Connect_Session', 'handle_disconnect');
     }
 
     /**
@@ -202,17 +209,26 @@ class Kiyoh_Plugin {
      */
     public function cleanup_cache() {
         global $wpdb;
-        
-        // Clean up expired cache entries
-        $cache_table = $wpdb->prefix . 'kiyoh_review_cache';
-        $wpdb->query("DELETE FROM {$cache_table} WHERE expires_at < NOW()");
-        
-        // Clean up old invitation records (older than 90 days)
-        $invitations_table = $wpdb->prefix . 'kiyoh_invitations';
-        $wpdb->query("DELETE FROM {$invitations_table} WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)");
-        
-        // Clean up old sync records (older than 30 days)
-        $sync_table = $wpdb->prefix . 'kiyoh_product_sync';
-        $wpdb->query("DELETE FROM {$sync_table} WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY) AND sync_status = 'success'");
+
+        $cache_table = Kiyoh_Db::table($wpdb->prefix, 'kiyoh_review_cache');
+        if ($cache_table !== '') {
+            $wpdb->query('DELETE FROM ' . $cache_table . ' WHERE expires_at < NOW()');
+        }
+
+        $invitations_table = Kiyoh_Db::table($wpdb->prefix, 'kiyoh_invitations');
+        if ($invitations_table !== '') {
+            $wpdb->query('DELETE FROM ' . $invitations_table . ' WHERE created_at < DATE_SUB(NOW(), INTERVAL 90 DAY)');
+        }
+
+        $sync_table = Kiyoh_Db::table($wpdb->prefix, 'kiyoh_product_sync');
+        if ($sync_table !== '') {
+            $sql = $wpdb->prepare(
+                'DELETE FROM ' . $sync_table . ' WHERE created_at < DATE_SUB(NOW(), INTERVAL 30 DAY) AND sync_status = %s',
+                'success'
+            );
+            if (is_string($sql)) {
+                $wpdb->query($sql);
+            }
+        }
     }
 }

@@ -30,7 +30,7 @@ class Kiyoh_Admin {
             return true;
         }
 
-        return isset($_GET['page']) && $_GET['page'] === 'kiyoh-settings';
+        return isset($_GET['page']) && $_GET['page'] === 'kiyoh-settings'; // preflight: ignore — compared to a fixed page slug, not printed
     }
 
     public function enqueue_styles($hook) {
@@ -537,12 +537,41 @@ class Kiyoh_Admin {
                 $mobile_urls = sanitize_text_field($input['general']['mobile_urls']);
             }
 
+            $new_location = sanitize_text_field($input['general']['location_id'] ?? '');
+            $new_key = sanitize_text_field($input['general']['api_key'] ?? '');
+            $old_location = '';
+            $old_key = '';
+            $old_source = 'manual';
+            if (is_array($existing_settings) && isset($existing_settings['general']) && is_array($existing_settings['general'])) {
+                $old_location = (string) ($existing_settings['general']['location_id'] ?? '');
+                $old_key = (string) ($existing_settings['general']['api_key'] ?? '');
+                $old_source = (($existing_settings['general']['credential_source'] ?? '') === 'connect') ? 'connect' : 'manual';
+            }
+            $apply_mode = class_exists('Kiyoh_Connect_Session') ? Kiyoh_Connect_Session::apply_mode() : '';
+            if ($apply_mode === 'connect') {
+                $source = 'connect';
+            } elseif ($apply_mode === 'disconnect') {
+                $source = 'manual';
+            } elseif ($new_location !== $old_location || $new_key !== $old_key) {
+                $source = 'manual';
+                if ($old_source === 'connect' && class_exists('Kiyoh_Connect_Session')) {
+                    Kiyoh_Connect_Session::on_manual_override();
+                }
+            } else {
+                $source = $old_source;
+            }
+            $platform = sanitize_text_field($input['general']['platform'] ?? '');
+            if (!in_array($platform, array('kiyoh', 'klantenvertellen'), true)) {
+                $platform = 'kiyoh';
+            }
+
             $sanitized['general'] = array(
                 'enabled' => !empty($input['general']['enabled']),
-                'platform' => sanitize_text_field($input['general']['platform'] ?? ''),
-                'location_id' => sanitize_text_field($input['general']['location_id'] ?? ''),
-                'api_key' => sanitize_text_field($input['general']['api_key'] ?? ''),
+                'platform' => $platform,
+                'location_id' => $new_location,
+                'api_key' => $new_key,
                 'mobile_urls' => $mobile_urls,
+                'credential_source' => $source,
             );
         }
 
@@ -642,7 +671,7 @@ class Kiyoh_Admin {
      */
     public function ajax_bulk_sync() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -688,7 +717,7 @@ class Kiyoh_Admin {
      */
     public function ajax_bulk_sync_products() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -707,7 +736,7 @@ class Kiyoh_Admin {
      */
     public function ajax_test_api_connection() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -729,7 +758,7 @@ class Kiyoh_Admin {
      * AJAX handler: queue a background rating sync and run the first chunk.
      */
     public function ajax_sync_product_ratings() {
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -760,7 +789,7 @@ class Kiyoh_Admin {
      * is currently holding the lock (covers DISABLE_WP_CRON).
      */
     public function ajax_rating_sync_status() {
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 

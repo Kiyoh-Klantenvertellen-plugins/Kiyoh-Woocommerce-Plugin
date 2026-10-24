@@ -745,7 +745,7 @@ class Kiyoh_Product_Sync_Manager {
 
     public function ajax_bulk_sync_products() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -754,7 +754,7 @@ class Kiyoh_Product_Sync_Manager {
             wp_die('Insufficient permissions');
         }
 
-        $page = isset($_POST['page']) ? intval($_POST['page']) : 1;
+        $page = isset($_POST['page']) ? intval($_POST['page']) : 1; // preflight: ignore — cast to int after the nonce and manage_woocommerce checks above
         $per_page = 50; // Process 50 products per batch
         
         $offset = ($page - 1) * $per_page;

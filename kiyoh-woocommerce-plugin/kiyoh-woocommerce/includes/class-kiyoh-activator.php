@@ -162,6 +162,7 @@ class Kiyoh_Activator {
                 'platform' => 'kiyoh',
                 'location_id' => '',
                 'api_key' => '',
+                'credential_source' => 'manual',
             ),
             'product_sync' => array(
                 'auto_sync' => true,

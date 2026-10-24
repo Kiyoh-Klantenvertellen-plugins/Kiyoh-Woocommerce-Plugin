@@ -1084,11 +1084,18 @@ class Kiyoh_Rating_Manager {
         global $wpdb;
 
         $skus = array();
-        $table = $wpdb->prefix . 'kiyoh_product_sync';
-        $table_exists = $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
+        if (!class_exists('Kiyoh_Db')) {
+            require_once dirname(__DIR__) . '/class-kiyoh-db.php';
+        }
+        $table = Kiyoh_Db::table($wpdb->prefix, 'kiyoh_product_sync');
+        $table_exists = $table === '' ? '' : $wpdb->get_var($wpdb->prepare('SHOW TABLES LIKE %s', $wpdb->esc_like($table)));
 
-        if ($table_exists === $table) {
-            $product_ids = $wpdb->get_col("SELECT product_id FROM {$table} WHERE sync_status = 'success'");
+        if ($table !== '' && $table_exists === $table) {
+            $product_sql = $wpdb->prepare(
+                'SELECT product_id FROM ' . $table . ' WHERE sync_status = %s',
+                'success'
+            );
+            $product_ids = is_string($product_sql) ? $wpdb->get_col($product_sql) : array();
             foreach ($product_ids as $product_id) {
                 $product = wc_get_product((int) $product_id);
                 if (!$product) {
