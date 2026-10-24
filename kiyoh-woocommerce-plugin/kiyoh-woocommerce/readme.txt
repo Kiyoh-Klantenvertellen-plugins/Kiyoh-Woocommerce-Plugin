@@ -25,22 +25,21 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 == Installation ==
 
 1. Upload the plugin to `/wp-content/plugins/kiyoh-woocommerce/` and activate it. WooCommerce must be active. PHP 8.2 or newer is required.
-2. Open WooCommerce → Kiyoh. Click **Connect with Kiyoh / Klantenvertellen**, or enter the Location ID and API key for an existing install.
-3. Connect needs `KIYOH_CONNECT_HMAC_KEY` and `KIYOH_CONNECT_CLIENT_SECRET` in `wp-config.php`. Those secrets are not in this plugin.
-4. Save, then run Bulk Sync Products once.
-5. Choose the order status that should send a review invitation.
+2. Open WooCommerce → Kiyoh. Click **Connect with Kiyoh / Klantenvertellen**, or enter the Location ID and API key for an existing install. Connect does not need extra values in `wp-config.php`. The shop must use HTTPS and pretty permalinks.
+3. Save, then run Bulk Sync Products once.
+4. Choose the order status that should send a review invitation.
 
 == Permissions and data ==
 
 * Settings, Connect, disconnect, the connection test, and sync require `manage_woocommerce`.
-* The plugin stores the Location ID, invite API key, invitation rules, product-sync rows, a review cache, and an encrypted Connect refresh token.
+* The plugin stores the Location ID, invite API key, invitation rules, product-sync rows, a review cache, and the encrypted Connect shop secret and refresh token.
 * Deactivate keeps that data and stops scheduled jobs. Delete removes options, tables, cron, and transients, and revokes the shop at Kiyoh-Connect.
 
 == Changelog ==
 
 = 1.4.0 =
-* Connect with Kiyoh / Klantenvertellen via Kiyoh-Connect (per-shop return to /wp-json/kiyoh/v1/oauth/callback). The manual Location ID and API key remain for existing installs.
-* Connect HMAC key and client secret are read from wp-config.php or the environment. They are not shipped in the plugin.
+* Connect with Kiyoh / Klantenvertellen via Kiyoh-Connect 1.2.0 (public client, per-shop secret, return to /wp-json/kiyoh/v1/oauth/callback). The manual Location ID and API key remain for existing installs.
+* No wp-config secret is required. The shop secret from registration is stored encrypted and reused while the return address stays the same.
 * Uninstall removes plugin data and revokes the Connect shop. Deactivate keeps settings and tokens.
 * Remaining direct SQL uses whitelisted table names and $wpdb->prepare for values.
 

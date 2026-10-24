@@ -34,13 +34,6 @@ class Kiyoh_Connect_Session {
     }
 
     /**
-     * @return bool
-     */
-    public static function secrets_configured() {
-        return self::hmac_key() !== '' && self::client_secret() !== '';
-    }
-
-    /**
      * @param mixed $server Unused. rest_api_init passes the REST server.
      */
     public static function register_routes($server = null) {
@@ -111,9 +104,6 @@ class Kiyoh_Connect_Session {
         if ($issuer === '') {
             wp_send_json_error(array('message' => __('Choose Kiyoh.com or Klantenvertellen.nl before connecting.', 'kiyoh-woocommerce')), 400);
         }
-        if (!self::secrets_configured()) {
-            wp_send_json_error(array('message' => self::missing_secret_message()), 400);
-        }
         if (!function_exists('openssl_encrypt')) {
             wp_send_json_error(array('message' => __('This server cannot protect Connect tokens because OpenSSL is missing.', 'kiyoh-woocommerce')), 500);
         }
@@ -132,29 +122,55 @@ class Kiyoh_Connect_Session {
             ), 400);
         }
 
-        $issued_at = time();
-        $body = Kiyoh_Connect::signed_shop_body('register', $origin, $callback, $issued_at, self::hmac_key());
-        if ($body === array()) {
-            wp_send_json_error(array('message' => self::missing_secret_message()), 400);
+        $account = get_option(Kiyoh_Connect::OPTION_ACCOUNT, array());
+        if (!is_array($account)) {
+            $account = array();
         }
-        $registered = self::remote_json('POST', $issuer . Kiyoh_Connect::REGISTER_PATH, array('Content-Type' => 'application/json'), wp_json_encode($body), true);
-        if (!Kiyoh_Connect::register_accepted($registered['status'])) {
-            $message = (int) $registered['status'] === 401
-                ? __('Kiyoh-Connect rejected the shop signature. Check KIYOH_CONNECT_HMAC_KEY.', 'kiyoh-woocommerce')
-                : Kiyoh_Connect::oauth_error_message(isset($registered['data']['error']) ? $registered['data']['error'] : '');
-            wp_send_json_error(array('message' => $message), 502);
+        $shop = self::reusable_shop_credentials($account, $issuer, $callback);
+        $promote = false;
+        if ($shop === null) {
+            $registered = self::remote_json(
+                'POST',
+                $issuer . Kiyoh_Connect::REGISTER_PATH,
+                array('Content-Type' => 'application/json', 'Accept' => 'application/json'),
+                wp_json_encode(Kiyoh_Connect::register_body($origin, $callback)),
+                true
+            );
+            if ((int) $registered['status'] === 429) {
+                wp_send_json_error(array('message' => __('Kiyoh-Connect is busy. Wait a moment and try again.', 'kiyoh-woocommerce')), 429);
+            }
+            $parsed = Kiyoh_Connect::parse_registration($registered['data'], $origin, $callback);
+            if ((int) $registered['status'] !== 200 || !$parsed['ok']) {
+                wp_send_json_error(array(
+                    'message' => __('Kiyoh-Connect could not register this shop. You can still paste a Location ID and API key.', 'kiyoh-woocommerce'),
+                ), 502);
+            }
+            $shop = array('shop_id' => $parsed['shop_id'], 'shop_secret' => $parsed['shop_secret']);
+            if ($parsed['status'] === 'active') {
+                if (!self::store_shop_credentials($issuer, $origin, $callback, $parsed['shop_id'], $parsed['shop_secret'])) {
+                    wp_send_json_error(array('message' => __('This server cannot protect the Connect shop secret.', 'kiyoh-woocommerce')), 500);
+                }
+            } else {
+                $promote = true;
+            }
         }
 
+        $material = self::crypto_key_material();
         $verifier = Kiyoh_Connect::code_verifier();
         $state = Kiyoh_Connect::code_verifier();
-        $stored_verifier = Kiyoh_Connect::encrypt_secret($verifier, self::crypto_key_material());
-        if ($stored_verifier === '') {
+        $stored_verifier = Kiyoh_Connect::encrypt_secret($verifier, $material);
+        $stored_shop_id = Kiyoh_Connect::encrypt_secret($shop['shop_id'], $material);
+        $stored_shop_secret = Kiyoh_Connect::encrypt_secret($shop['shop_secret'], $material);
+        if ($stored_verifier === '' || $stored_shop_id === '' || $stored_shop_secret === '') {
             wp_send_json_error(array('message' => __('This server cannot protect Connect tokens.', 'kiyoh-woocommerce')), 500);
         }
         $key = Kiyoh_Connect::state_storage_key($state);
         set_transient($key, array(
             'state_hash' => hash('sha256', $state),
             'verifier' => $stored_verifier,
+            'shop_id' => $stored_shop_id,
+            'shop_secret' => $stored_shop_secret,
+            'promote_shop_secret' => $promote,
             'redirect_uri' => $callback,
             'issuer' => $issuer,
             'platform' => $platform,
@@ -250,24 +266,6 @@ class Kiyoh_Connect_Session {
     /**
      * @return string
      */
-    private static function hmac_key() {
-        $constant = defined('KIYOH_CONNECT_HMAC_KEY') ? KIYOH_CONNECT_HMAC_KEY : '';
-        $env = getenv('KIYOH_CONNECT_HMAC_KEY');
-        return Kiyoh_Connect::configured_secret($constant, $env === false ? '' : $env);
-    }
-
-    /**
-     * @return string
-     */
-    private static function client_secret() {
-        $constant = defined('KIYOH_CONNECT_CLIENT_SECRET') ? KIYOH_CONNECT_CLIENT_SECRET : '';
-        $env = getenv('KIYOH_CONNECT_CLIENT_SECRET');
-        return Kiyoh_Connect::configured_secret($constant, $env === false ? '' : $env);
-    }
-
-    /**
-     * @return string
-     */
     private static function crypto_key_material() {
         if (!function_exists('wp_salt')) {
             return '';
@@ -277,10 +275,76 @@ class Kiyoh_Connect_Session {
     }
 
     /**
-     * @return string
+     * @param array<string,mixed> $account
+     * @param string $issuer
+     * @param string $redirect_uri
+     * @return array{shop_id:string,shop_secret:string}|null
      */
-    private static function missing_secret_message() {
-        return __('Kiyoh-Connect signing is not configured on this server. The signing key and client secret are not part of the plugin. Add KIYOH_CONNECT_HMAC_KEY and KIYOH_CONNECT_CLIENT_SECRET in wp-config.php, or paste the Location ID and API key below.', 'kiyoh-woocommerce');
+    private static function reusable_shop_credentials($account, $issuer, $redirect_uri) {
+        if (!Kiyoh_Connect::registration_reusable($account, $issuer, $redirect_uri)) {
+            return null;
+        }
+        $material = self::crypto_key_material();
+        $shop_id = Kiyoh_Connect::decrypt_secret($account['shop_id'], $material);
+        $shop_secret = Kiyoh_Connect::decrypt_secret($account['shop_secret'], $material);
+        if ($shop_id === '' || $shop_secret === '') {
+            return null;
+        }
+        return array('shop_id' => $shop_id, 'shop_secret' => $shop_secret);
+    }
+
+    /**
+     * An active registration secret is returned once. Save it before the popup,
+     * so closing the popup does not lose it. A pending secret waits for the
+     * code exchange.
+     *
+     * @param string $issuer
+     * @param string $origin
+     * @param string $redirect_uri
+     * @param string $shop_id
+     * @param string $shop_secret
+     * @return bool
+     */
+    private static function store_shop_credentials($issuer, $origin, $redirect_uri, $shop_id, $shop_secret) {
+        $material = self::crypto_key_material();
+        $stored_id = Kiyoh_Connect::encrypt_secret($shop_id, $material);
+        $stored_secret = Kiyoh_Connect::encrypt_secret($shop_secret, $material);
+        if ($stored_id === '' || $stored_secret === '') {
+            return false;
+        }
+        $account = get_option(Kiyoh_Connect::OPTION_ACCOUNT, array());
+        if (!is_array($account)) {
+            $account = array();
+        }
+        $previous_id = Kiyoh_Connect::decrypt_secret(isset($account['shop_id']) ? $account['shop_id'] : '', $material);
+        if ($previous_id !== '' && $previous_id !== $shop_id) {
+            $account['refresh_token'] = '';
+            $account['access_token'] = '';
+            $account['access_expires_at'] = 0;
+        }
+        $account['schema'] = 2;
+        $account['issuer'] = $issuer;
+        $account['shop_origin'] = $origin;
+        $account['redirect_uri'] = $redirect_uri;
+        $account['shop_id'] = $stored_id;
+        $account['shop_secret'] = $stored_secret;
+        $account['shop_status'] = 'active';
+        update_option(Kiyoh_Connect::OPTION_ACCOUNT, $account, false);
+        return true;
+    }
+
+    /**
+     * The stored shop secret was rejected. The next Connect click registers again.
+     */
+    private static function clear_shop_secret() {
+        $account = get_option(Kiyoh_Connect::OPTION_ACCOUNT, array());
+        if (!is_array($account)) {
+            return;
+        }
+        $account['shop_id'] = '';
+        $account['shop_secret'] = '';
+        $account['shop_status'] = '';
+        update_option(Kiyoh_Connect::OPTION_ACCOUNT, $account, false);
     }
 
     /**
@@ -374,9 +438,12 @@ class Kiyoh_Connect_Session {
 
         $opener = isset($pending['opener_origin']) ? (string) $pending['opener_origin'] : '';
         $failed['opener_origin'] = $opener;
-        $verifier = Kiyoh_Connect::decrypt_secret($pending['verifier'], self::crypto_key_material());
-        if ($verifier === '' || !self::secrets_configured()) {
-            $failed['message'] = self::missing_secret_message();
+        $material = self::crypto_key_material();
+        $verifier = Kiyoh_Connect::decrypt_secret($pending['verifier'], $material);
+        $shop_id = Kiyoh_Connect::decrypt_secret(isset($pending['shop_id']) ? $pending['shop_id'] : '', $material);
+        $shop_secret = Kiyoh_Connect::decrypt_secret(isset($pending['shop_secret']) ? $pending['shop_secret'] : '', $material);
+        if ($verifier === '' || $shop_id === '' || $shop_secret === '') {
+            $failed['message'] = __('This sign-in expired. Start again from WooCommerce, then Kiyoh.', 'kiyoh-woocommerce');
             self::flash($failed['message']);
             return $failed;
         }
@@ -389,11 +456,24 @@ class Kiyoh_Connect_Session {
             return $failed;
         }
 
-        $form = Kiyoh_Connect::authorization_code_form($code, $verifier, $redirect_uri, self::client_secret());
+        $form = Kiyoh_Connect::authorization_code_form($code, $verifier, $redirect_uri, $shop_id, $shop_secret);
         $token_response = self::remote_json('POST', $issuer . Kiyoh_Connect::TOKEN_PATH, array('Content-Type' => 'application/x-www-form-urlencoded'), $form, true);
         $token = Kiyoh_Connect::parse_token($token_response['data']);
         if (!$token['ok']) {
-            $failed['message'] = Kiyoh_Connect::oauth_error_message(isset($token_response['data']['error']) ? $token_response['data']['error'] : '');
+            $error = isset($token_response['data']['error']) ? (string) $token_response['data']['error'] : '';
+            if ((int) $token_response['status'] === 401 && ($error === 'invalid_client' || $error === '') && empty($pending['promote_shop_secret'])) {
+                self::clear_shop_secret();
+            }
+            $failed['message'] = (int) $token_response['status'] === 401
+                ? Kiyoh_Connect::oauth_error_message($error !== '' ? $error : 'invalid_client')
+                : Kiyoh_Connect::oauth_error_message($error);
+            self::flash($failed['message']);
+            return $failed;
+        }
+
+        $origin = isset($pending['origin']) ? (string) $pending['origin'] : '';
+        if (!self::store_shop_credentials($issuer, $origin, $redirect_uri, $shop_id, $shop_secret)) {
+            $failed['message'] = __('This server cannot protect the Connect shop secret.', 'kiyoh-woocommerce');
             self::flash($failed['message']);
             return $failed;
         }
@@ -404,13 +484,13 @@ class Kiyoh_Connect_Session {
         ), null, true);
         $credentials = Kiyoh_Connect::parse_credentials($credentials_response['data']);
         if (!$credentials['ok']) {
-            self::revoke_access_token($issuer, $token['access_token']);
+            self::revoke_access_token($issuer, $token['access_token'], $shop_id, $shop_secret);
             $failed['message'] = __('Kiyoh-Connect did not return a location and invite key for this shop.', 'kiyoh-woocommerce');
             self::flash($failed['message']);
             return $failed;
         }
         if ($credentials['platform'] !== $pending['platform']) {
-            self::revoke_access_token($issuer, $token['access_token']);
+            self::revoke_access_token($issuer, $token['access_token'], $shop_id, $shop_secret);
             $failed['message'] = __('The location belongs to the other Kiyoh platform. Choose that platform and connect again.', 'kiyoh-woocommerce');
             self::flash($failed['message']);
             return $failed;
@@ -433,8 +513,12 @@ class Kiyoh_Connect_Session {
         $material = self::crypto_key_material();
         $refresh = $token['refresh_token'] === '' ? '' : Kiyoh_Connect::encrypt_secret($token['refresh_token'], $material);
         $access = Kiyoh_Connect::encrypt_secret($token['access_token'], $material);
+        $existing = get_option(Kiyoh_Connect::OPTION_ACCOUNT, array());
+        if (!is_array($existing)) {
+            $existing = array();
+        }
         $account = array(
-            'schema' => 1,
+            'schema' => 2,
             'status' => 'connected',
             'platform' => $credentials['platform'],
             'issuer' => $pending['issuer'],
@@ -447,7 +531,10 @@ class Kiyoh_Connect_Session {
             'access_token' => $access,
             'access_expires_at' => time() + (int) $token['expires_in'],
             'connected_at' => time(),
-            'registered_at' => time(),
+            'registered_at' => !empty($existing['registered_at']) ? $existing['registered_at'] : time(),
+            'shop_id' => isset($existing['shop_id']) ? $existing['shop_id'] : '',
+            'shop_secret' => isset($existing['shop_secret']) ? $existing['shop_secret'] : '',
+            'shop_status' => 'active',
         );
         update_option(Kiyoh_Connect::OPTION_ACCOUNT, $account, false);
         self::apply_credentials_to_settings($credentials['location_id'], $credentials['api_key'], $credentials['platform']);
@@ -493,10 +580,13 @@ class Kiyoh_Connect_Session {
         if (!is_array($account) || empty($account['issuer']) || !Kiyoh_Connect::is_allowed_issuer($account['issuer'])) {
             return null;
         }
-        if (!self::secrets_configured()) {
+        $material = self::crypto_key_material();
+        $shop_id = Kiyoh_Connect::decrypt_secret(isset($account['shop_id']) ? $account['shop_id'] : '', $material);
+        $shop_secret = Kiyoh_Connect::decrypt_secret(isset($account['shop_secret']) ? $account['shop_secret'] : '', $material);
+        if ($shop_id === '' || $shop_secret === '') {
+            self::mark_broken();
             return null;
         }
-        $material = self::crypto_key_material();
         $access = '';
         if (!empty($account['access_token']) && (int) $account['access_expires_at'] > time() + 30) {
             $access = Kiyoh_Connect::decrypt_secret($account['access_token'], $material);
@@ -507,7 +597,7 @@ class Kiyoh_Connect_Session {
                 self::mark_broken();
                 return null;
             }
-            $form = Kiyoh_Connect::refresh_token_form($refresh, self::client_secret());
+            $form = Kiyoh_Connect::refresh_token_form($refresh, $shop_id, $shop_secret);
             $token_response = self::remote_json('POST', $account['issuer'] . Kiyoh_Connect::TOKEN_PATH, array('Content-Type' => 'application/x-www-form-urlencoded'), $form, true);
             $token = Kiyoh_Connect::parse_token($token_response['data']);
             if (!$token['ok']) {
@@ -563,41 +653,48 @@ class Kiyoh_Connect_Session {
         if (!is_array($account) || empty($account['issuer']) || !Kiyoh_Connect::is_allowed_issuer($account['issuer'])) {
             return;
         }
-        $secret = self::client_secret();
         $material = self::crypto_key_material();
+        $shop_id = Kiyoh_Connect::decrypt_secret(isset($account['shop_id']) ? $account['shop_id'] : '', $material);
+        $shop_secret = Kiyoh_Connect::decrypt_secret(isset($account['shop_secret']) ? $account['shop_secret'] : '', $material);
+        if ($shop_id === '' || $shop_secret === '') {
+            return;
+        }
         $refresh = Kiyoh_Connect::decrypt_secret(isset($account['refresh_token']) ? $account['refresh_token'] : '', $material);
-        if ($refresh !== '' && $secret !== '') {
+        if ($refresh !== '') {
             self::remote_json(
                 'POST',
                 $account['issuer'] . Kiyoh_Connect::REVOKE_PATH,
                 array('Content-Type' => 'application/x-www-form-urlencoded'),
-                Kiyoh_Connect::revoke_token_form($refresh, $secret),
+                Kiyoh_Connect::revoke_token_form($refresh, $shop_id, $shop_secret),
                 false
             );
         }
-        $origin = isset($account['shop_origin']) ? $account['shop_origin'] : '';
-        $redirect = isset($account['redirect_uri']) ? $account['redirect_uri'] : '';
-        $hmac = self::hmac_key();
-        if ($origin !== '' && $redirect !== '' && $hmac !== '') {
-            $body = Kiyoh_Connect::signed_shop_body('revoke', $origin, $redirect, time(), $hmac);
-            if ($body !== array()) {
-                self::remote_json('POST', $account['issuer'] . Kiyoh_Connect::SHOP_REVOKE_PATH, array('Content-Type' => 'application/json'), wp_json_encode($body), false);
-            }
-        }
+        self::remote_json(
+            'POST',
+            $account['issuer'] . Kiyoh_Connect::SHOP_REVOKE_PATH,
+            array('Content-Type' => 'application/json'),
+            wp_json_encode(Kiyoh_Connect::shop_revoke_body($shop_id, $shop_secret)),
+            false
+        );
     }
 
     /**
      * @param string $issuer
      * @param string $access_token
+     * @param string $shop_id
+     * @param string $shop_secret
      */
-    private static function revoke_access_token($issuer, $access_token) {
-        $secret = self::client_secret();
-        if ($secret === '' || $access_token === '') {
+    private static function revoke_access_token($issuer, $access_token, $shop_id, $shop_secret) {
+        if ($access_token === '' || $shop_id === '' || $shop_secret === '') {
             return;
         }
-        $form = Kiyoh_Connect::revoke_token_form($access_token, $secret);
-        $form['token_type_hint'] = 'access_token';
-        self::remote_json('POST', $issuer . Kiyoh_Connect::REVOKE_PATH, array('Content-Type' => 'application/x-www-form-urlencoded'), $form, false);
+        self::remote_json(
+            'POST',
+            $issuer . Kiyoh_Connect::REVOKE_PATH,
+            array('Content-Type' => 'application/x-www-form-urlencoded'),
+            Kiyoh_Connect::revoke_token_form($access_token, $shop_id, $shop_secret),
+            false
+        );
     }
 
     private static function clear_connect_credentials() {

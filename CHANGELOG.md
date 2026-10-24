@@ -3,13 +3,14 @@
 ## v1.4.0
 
 ### Added
-- **Connect with Kiyoh / Klantenvertellen** on WooCommerce → Kiyoh → General. The button registers this shop with Kiyoh-Connect 1.1.0 (`https://connect.kiyoh.com` for Kiyoh, tenant 98, or `https://connect.klantenvertellen.nl` for Klantenvertellen, tenant 99), opens the sign-in popup, and returns to `https://{shop-host}/wp-json/kiyoh/v1/oauth/callback`. Client id `kiyoh-woocommerce`, scope `integration:connect`, PKCE S256 and `state`.
-- After sign-in, `locationId` and `inviteApiKey` from `GET /integration/credentials` are saved as the Location ID and API key. The refresh token is encrypted (AES-256-GCM) in `kiyoh_connect_account`. A publication HTTP 401 refreshes once and retries. Disconnect revokes the token and the shop registration.
+- **Connect with Kiyoh / Klantenvertellen** on WooCommerce → Kiyoh → General. The button talks to Kiyoh-Connect 1.2.0 (`https://connect.kiyoh.com` for Kiyoh, tenant 98, or `https://connect.klantenvertellen.nl` for Klantenvertellen, tenant 99), opens the sign-in popup, and returns to `https://{shop-host}/wp-json/kiyoh/v1/oauth/callback`. Client id `kiyoh-woocommerce`, scope `integration:connect`, PKCE S256 and `state`.
+- The first click registers the shop with `POST /shops/register` (`client_id`, `shop_url`, `redirect_uri`, no signature). Connect returns `shop_id` and `shop_secret` once. Both are stored encrypted. The same return address skips registration and reuses that secret. A new registration returns a pending secret that replaces the stored one only after the code exchange succeeds.
+- After sign-in, `locationId` and `inviteApiKey` from `GET /integration/credentials` are saved as the Location ID and API key. Token, refresh, and revoke calls send `shop_id` and `shop_secret`. A publication HTTP 401 refreshes once and retries. Disconnect and uninstall revoke the token and the shop registration.
 - The Location ID and API key fields stay as the fallback for existing installs. Editing either field switches the shop back to the manual key so a later refresh cannot overwrite it.
 - `uninstall.php` revokes the Connect shop and removes plugin options, custom tables, cron, and `kiyoh_` transients. Deactivation still keeps settings, Connect tokens, invitations, and product-sync rows.
 
 ### Security
-- The Connect HMAC key and OAuth client secret are **not** in the plugin. Set `KIYOH_CONNECT_HMAC_KEY` and `KIYOH_CONNECT_CLIENT_SECRET` in `wp-config.php` (or the same environment variables). Without them the Connect button explains that and the manual key still works.
+- There is no shared HMAC key and no OAuth client secret. Nothing has to be added to `wp-config.php` for Connect. The per-shop secret stays encrypted and is not sent on the authorize URL.
 - The six unprepared SQL calls now use a whitelisted table name. Query values go through `$wpdb->prepare`.
 
 ## v1.3.0

@@ -1,6 +1,6 @@
 <?php
 /**
- * Kiyoh-Connect 1.1.0 rules for the WooCommerce plugin.
+ * Kiyoh-Connect 1.2.0 rules for the WooCommerce plugin.
  *
  * Run from the repo root:
  *   php tests/kiyoh-connect-test.php
@@ -34,8 +34,6 @@ function expect_false($actual, $message) {
 
 $origin = 'https://shop.example';
 $callback = 'https://shop.example/wp-json/kiyoh/v1/oauth/callback';
-$issued = 1700000000;
-$key = 'test-hmac-key';
 
 expect_same(Kiyoh_Connect::ISSUER_KIYOH, Kiyoh_Connect::issuer_for_platform('kiyoh'), 'Kiyoh uses connect.kiyoh.com');
 expect_same(Kiyoh_Connect::ISSUER_KLANTENVERTELLEN, Kiyoh_Connect::issuer_for_platform('klantenvertellen'), 'Klantenvertellen uses connect.klantenvertellen.nl');
@@ -44,33 +42,58 @@ expect_same(98, Kiyoh_Connect::tenant_for_platform('kiyoh'), 'Kiyoh tenant is 98
 expect_same(99, Kiyoh_Connect::tenant_for_platform('klantenvertellen'), 'Klantenvertellen tenant is 99');
 expect_same('kiyoh', Kiyoh_Connect::platform_for_tenant('98'), 'tenant 98 is Kiyoh');
 expect_same('klantenvertellen', Kiyoh_Connect::platform_for_tenant(99), 'tenant 99 is Klantenvertellen');
-expect_same('from-constant', Kiyoh_Connect::configured_secret('from-constant', 'from-env'), 'a wp-config constant wins over the environment');
-expect_same('from-env', Kiyoh_Connect::configured_secret('', 'from-env'), 'the environment is used when the constant is empty');
 
 expect_same($origin, Kiyoh_Connect::shop_origin('https://Shop.Example/store'), 'shop origin is scheme and host, lowercased, without a path');
 expect_same('https://shop.example:8443', Kiyoh_Connect::shop_origin('https://shop.example:8443/shop'), 'a non-default port stays on the origin');
 expect_same('', Kiyoh_Connect::shop_origin('http://shop.example'), 'http is not a Connect origin');
 expect_same($callback, Kiyoh_Connect::callback_url($origin), 'the return address is the REST callback on the shop host');
 
-$canonical = "v1\nregister\nkiyoh-woocommerce\n{$origin}\n{$callback}\n{$issued}";
-expect_same($canonical, Kiyoh_Connect::canonical_message('register', Kiyoh_Connect::CLIENT_ID, $origin, $callback, $issued), 'register canonical bytes are LF-joined with no trailing newline');
-expect_false(str_ends_with(Kiyoh_Connect::canonical_message('register', Kiyoh_Connect::CLIENT_ID, $origin, $callback, $issued), "\n"), 'canonical message has no trailing newline');
-$expected_sig = rtrim(strtr(base64_encode(hash_hmac('sha256', $canonical, $key, true)), '+/', '-_'), '=');
-expect_same($expected_sig, Kiyoh_Connect::sign('register', Kiyoh_Connect::CLIENT_ID, $origin, $callback, $issued, $key), 'signature is unpadded base64url HMAC-SHA256');
-expect_same('', Kiyoh_Connect::sign('register', Kiyoh_Connect::CLIENT_ID, $origin, $callback, $issued, ''), 'an empty HMAC key does not sign');
-$revoke = Kiyoh_Connect::canonical_message('revoke', Kiyoh_Connect::CLIENT_ID, $origin, $callback, $issued);
-expect_true(strpos($revoke, "\nrevoke\n") !== false, 'uninstall uses the revoke verb on its own line');
-expect_true(Kiyoh_Connect::sign('revoke', Kiyoh_Connect::CLIENT_ID, $origin, $callback, $issued, $key) !== $expected_sig, 'revoke signature differs from register');
-
-$body = Kiyoh_Connect::signed_shop_body('register', $origin, $callback, $issued, $key);
+$body = Kiyoh_Connect::register_body($origin, $callback);
+expect_same(array('client_id', 'shop_url', 'redirect_uri'), array_keys($body), 'register body has client_id, shop_url, and redirect_uri only');
 expect_same('kiyoh-woocommerce', $body['client_id'], 'register body uses client kiyoh-woocommerce');
-expect_same($origin, $body['shop_url'], 'shop_url is the shop origin');
+expect_same($origin, $body['shop_url'], 'shop_url is the https origin');
 expect_same($callback, $body['redirect_uri'], 'redirect_uri is the callback');
-expect_same($issued, $body['issued_at'], 'issued_at is the unix time');
-expect_same($expected_sig, $body['signature'], 'register body signature matches the canonical message');
-expect_true(Kiyoh_Connect::register_accepted(200), 'a new registration is accepted');
-expect_true(Kiyoh_Connect::register_accepted(409), 'registering the same shop again is accepted');
-expect_false(Kiyoh_Connect::register_accepted(401), 'a rejected signature is not accepted');
+expect_false(array_key_exists('signature', $body), 'register body has no signature');
+expect_false(array_key_exists('issued_at', $body), 'register body has no issued_at');
+
+$active = json_decode(file_get_contents(__DIR__ . '/fixtures/kiyoh-connect/register-active.json'), true);
+$parsed_active = Kiyoh_Connect::parse_registration($active, $origin, $callback);
+expect_true($parsed_active['ok'], 'an active registration parses');
+expect_same('shop_abc12345', $parsed_active['shop_id'], 'active registration keeps shop_id');
+expect_same('shop-secret-value-0001', $parsed_active['shop_secret'], 'active registration keeps shop_secret');
+expect_same('active', $parsed_active['status'], 'active registration status is active');
+$pending = json_decode(file_get_contents(__DIR__ . '/fixtures/kiyoh-connect/register-pending.json'), true);
+$parsed_pending = Kiyoh_Connect::parse_registration($pending, $origin, $callback);
+expect_true($parsed_pending['ok'], 'a pending registration parses');
+expect_same('pending', $parsed_pending['status'], 'pending registration status is pending');
+expect_false(Kiyoh_Connect::parse_registration($active, 'https://other.example', $callback)['ok'], 'a mismatched shop origin is rejected');
+expect_false(Kiyoh_Connect::parse_registration($active, $origin, $callback . '/extra')['ok'], 'a mismatched redirect_uri is rejected');
+$wrong_client = $active;
+$wrong_client['client_id'] = 'other-client';
+expect_false(Kiyoh_Connect::parse_registration($wrong_client, $origin, $callback)['ok'], 'a different client_id is rejected');
+$bad_status = $active;
+$bad_status['status'] = 'revoked';
+expect_false(Kiyoh_Connect::parse_registration($bad_status, $origin, $callback)['ok'], 'a status other than active or pending is rejected');
+$short_secret = $active;
+$short_secret['shop_secret'] = 'too-short';
+expect_false(Kiyoh_Connect::parse_registration($short_secret, $origin, $callback)['ok'], 'a short shop secret is rejected');
+
+$stored_account = array(
+    'issuer' => Kiyoh_Connect::ISSUER_KIYOH,
+    'redirect_uri' => $callback,
+    'shop_status' => 'active',
+    'shop_id' => 'v1:stored-shop-id',
+    'shop_secret' => 'v1:stored-shop-secret',
+);
+expect_true(Kiyoh_Connect::registration_reusable($stored_account, Kiyoh_Connect::ISSUER_KIYOH, $callback), 'the same issuer and return address reuse the shop secret');
+expect_false(Kiyoh_Connect::registration_reusable($stored_account, Kiyoh_Connect::ISSUER_KLANTENVERTELLEN, $callback), 'the other issuer does not reuse the secret');
+expect_false(Kiyoh_Connect::registration_reusable($stored_account, Kiyoh_Connect::ISSUER_KIYOH, 'https://shop.example:8443/wp-json/kiyoh/v1/oauth/callback'), 'a changed return address does not reuse the secret');
+$pending_account = $stored_account;
+$pending_account['shop_status'] = 'pending';
+expect_false(Kiyoh_Connect::registration_reusable($pending_account, Kiyoh_Connect::ISSUER_KIYOH, $callback), 'a pending secret is not reused');
+$empty_secret = $stored_account;
+$empty_secret['shop_secret'] = '';
+expect_false(Kiyoh_Connect::registration_reusable($empty_secret, Kiyoh_Connect::ISSUER_KIYOH, $callback), 'a missing shop secret is not reused');
 
 $verifier = 'dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk';
 expect_same('E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM', Kiyoh_Connect::code_challenge($verifier), 'PKCE S256 matches the RFC 7636 vector');
@@ -85,16 +108,30 @@ expect_true(strpos($authorize, 'code_challenge_method=S256') !== false, 'authori
 expect_true(strpos($authorize, 'client_id=kiyoh-woocommerce') !== false, 'authorize sends the WooCommerce client id');
 expect_true(strpos($authorize, 'scope=integration%3Aconnect') !== false, 'authorize requests integration:connect');
 expect_true(strpos($authorize, 'code_verifier=') === false, 'the verifier stays off the authorize URL');
-expect_true(strpos($authorize, 'client_secret') === false, 'the client secret stays off the authorize URL');
+expect_true(strpos($authorize, 'shop_secret') === false, 'the shop secret stays off the authorize URL');
+expect_true(strpos($authorize, 'client_secret') === false, 'the authorize URL has no client secret');
 expect_same('', Kiyoh_Connect::authorize_url('https://evil.example', $callback, $generated, 'abc'), 'authorize refuses an unknown issuer');
 
-$form = Kiyoh_Connect::authorization_code_form('code-value', $verifier, $callback, 'test-client-secret');
+$shop_id = 'shop_abc12345';
+$shop_secret = 'shop-secret-value-0001';
+$form = Kiyoh_Connect::authorization_code_form('code-value', $verifier, $callback, $shop_id, $shop_secret);
+expect_same(array('grant_type', 'client_id', 'shop_id', 'shop_secret', 'code', 'code_verifier', 'redirect_uri'), array_keys($form), 'token form fields are the 1.2.0 set');
 expect_same('authorization_code', $form['grant_type'], 'token grant is authorization_code');
 expect_same('kiyoh-woocommerce', $form['client_id'], 'token form sends the client id');
-expect_same('test-client-secret', $form['client_secret'], 'token form can carry a secret supplied by the caller');
+expect_same($shop_id, $form['shop_id'], 'token form sends the shop id');
+expect_same($shop_secret, $form['shop_secret'], 'token form sends the shop secret');
 expect_same($verifier, $form['code_verifier'], 'token form sends the PKCE verifier');
-expect_same('refresh_token', Kiyoh_Connect::refresh_token_form('refresh-token-value-0001', 'test-client-secret')['grant_type'], 'refresh uses grant_type refresh_token');
-expect_same('refresh_token', Kiyoh_Connect::revoke_token_form('refresh-token-value-0001', 'test-client-secret')['token_type_hint'], 'revoke hints that the token is a refresh token');
+expect_false(array_key_exists('client_secret', $form), 'token form has no client secret');
+$refresh = Kiyoh_Connect::refresh_token_form('refresh-token-value-0001', $shop_id, $shop_secret);
+expect_same(array('grant_type', 'refresh_token', 'client_id', 'shop_id', 'shop_secret'), array_keys($refresh), 'refresh form fields are the 1.2.0 set');
+expect_same('refresh_token', $refresh['grant_type'], 'refresh uses grant_type refresh_token');
+expect_same($shop_secret, $refresh['shop_secret'], 'refresh sends the shop secret');
+$revoke = Kiyoh_Connect::revoke_token_form('refresh-token-value-0001', $shop_id, $shop_secret);
+expect_same(array('token', 'client_id', 'shop_id', 'shop_secret'), array_keys($revoke), 'revoke form fields are the 1.2.0 set');
+expect_same('refresh-token-value-0001', $revoke['token'], 'revoke sends the token');
+expect_false(array_key_exists('token_type_hint', $revoke), 'revoke has no token_type_hint');
+$shop_revoke = Kiyoh_Connect::shop_revoke_body($shop_id, $shop_secret);
+expect_same(array('client_id' => 'kiyoh-woocommerce', 'shop_id' => $shop_id, 'shop_secret' => $shop_secret), $shop_revoke, 'shop revoke sends client_id, shop_id, and shop_secret');
 
 $token = json_decode(file_get_contents(__DIR__ . '/fixtures/kiyoh-connect/token.json'), true);
 $parsed_token = Kiyoh_Connect::parse_token($token);
@@ -143,13 +180,16 @@ expect_false(Kiyoh_Connect::interactive_should_retry(3, 1), 'the third failure i
 $rate = json_decode(file_get_contents(__DIR__ . '/fixtures/kiyoh-connect/rate-limit.json'), true);
 expect_same(30, Kiyoh_Connect::parse_retry_after('', $rate, 1700000000), 'retryAfterSeconds is read from the body');
 expect_same(15, Kiyoh_Connect::parse_retry_after('15', array(), 1700000000), 'a numeric Retry-After header is read');
-expect_same('Kiyoh-Connect rejected the client secret configured for this shop.', Kiyoh_Connect::oauth_error_message('invalid_client'), 'invalid client has a clear admin message');
+expect_same('Kiyoh-Connect rejected this shop secret. Connect again.', Kiyoh_Connect::oauth_error_message('invalid_client'), 'invalid client has a clear admin message');
 
 $stored = Kiyoh_Connect::encrypt_secret('refresh-token-value-0001', 'wp-salt-value');
 expect_true($stored !== '' && strpos($stored, 'refresh-token-value-0001') === false, 'refresh token ciphertext does not contain the token');
 expect_same('refresh-token-value-0001', Kiyoh_Connect::decrypt_secret($stored, 'wp-salt-value'), 'refresh token round-trips');
 expect_same('', Kiyoh_Connect::decrypt_secret($stored, 'other-salt'), 'a different key does not decrypt');
 expect_same('', Kiyoh_Connect::encrypt_secret('refresh-token-value-0001', ''), 'encryption refuses an empty key');
+$stored_shop = Kiyoh_Connect::encrypt_secret('shop-secret-value-0001', 'wp-salt-value');
+expect_true($stored_shop !== '' && strpos($stored_shop, 'shop-secret-value-0001') === false, 'shop secret ciphertext does not contain the secret');
+expect_same('shop-secret-value-0001', Kiyoh_Connect::decrypt_secret($stored_shop, 'wp-salt-value'), 'shop secret round-trips');
 
 $html = Kiyoh_Connect::callback_document(false, '<script>alert(1)</script>', $origin, 'https://evil.example/phish');
 expect_true(strpos($html, '<script>alert') === false, 'callback HTML escapes the message');
@@ -165,12 +205,16 @@ foreach ($iterator as $file) {
         continue;
     }
     $text = file_get_contents($file->getPathname());
-    if (preg_match('/(client_secret|hmac_key|KIYOH_CONNECT_HMAC_KEY|KIYOH_CONNECT_CLIENT_SECRET)\s*[:=]\s*[\'\"][^\'\"\s]{8,}[\'\"]/i', $text)) {
+    if (preg_match('/KIYOH_CONNECT_HMAC_KEY|KIYOH_CONNECT_CLIENT_SECRET/', $text)) {
+        $shipped_secret = $file->getPathname();
+        break;
+    }
+    if (preg_match('/(client_secret|hmac_key|shop_secret)\s*[:=]\s*[\'\"][^\'\"\s]{8,}[\'\"]/i', $text)) {
         $shipped_secret = $file->getPathname();
         break;
     }
 }
-expect_same(false, $shipped_secret, 'the plugin does not ship an HMAC key or client secret');
+expect_same(false, $shipped_secret, 'the plugin does not name a wp-config Connect secret or ship a shop secret');
 
 if ($failures > 0) {
     fwrite(STDERR, "{$failures} failed\n");

@@ -1,12 +1,10 @@
 <?php
 /**
- * Kiyoh-Connect 1.1.0 protocol helpers for the WooCommerce plugin.
+ * Kiyoh-Connect 1.2.0 protocol helpers for the WooCommerce plugin.
  *
  * No WordPress calls, so the rules can be tested without a shop.
- *
- * The HMAC key and OAuth client_secret are not stored in this file. A copy of
- * the plugin is installed on many shops, so those secrets must come from
- * wp-config.php or the server environment on each shop.
+ * The client is public. Connect issues a per-shop secret at registration.
+ * That secret is stored encrypted by the WordPress layer and is not in this file.
  */
 
 if (!defined('ABSPATH')) {
@@ -28,7 +26,6 @@ class Kiyoh_Connect {
     const TOKEN_PATH = '/token';
     const CREDENTIALS_PATH = '/integration/credentials';
     const REVOKE_PATH = '/revoke';
-    const CANONICAL_VERSION = 'v1';
     const OPTION_ACCOUNT = 'kiyoh_connect_account';
     const STATE_TTL = 900;
     const MAX_URL_LENGTH = 500;
@@ -88,21 +85,6 @@ class Kiyoh_Connect {
     }
 
     /**
-     * @param mixed $constant_value
-     * @param mixed $env_value
-     * @return string Constant wins when it is a non-empty string.
-     */
-    public static function configured_secret($constant_value, $env_value) {
-        if (is_string($constant_value) && $constant_value !== '') {
-            return $constant_value;
-        }
-        if (is_string($env_value) && $env_value !== '') {
-            return $env_value;
-        }
-        return '';
-    }
-
-    /**
      * https origin with no path and no trailing slash. Default port 443 is omitted.
      *
      * @param mixed $url
@@ -141,88 +123,94 @@ class Kiyoh_Connect {
     }
 
     /**
-     * @param mixed $verb register|revoke
-     * @param mixed $client_id
-     * @param mixed $origin
-     * @param mixed $redirect_uri
-     * @param mixed $issued_at
-     * @return string
-     */
-    public static function canonical_message($verb, $client_id, $origin, $redirect_uri, $issued_at) {
-        if ($verb !== 'register' && $verb !== 'revoke') {
-            return '';
-        }
-        if (!is_string($client_id) || $client_id === '' || !is_string($origin) || $origin === '') {
-            return '';
-        }
-        if (!is_string($redirect_uri) || $redirect_uri === '') {
-            return '';
-        }
-        if (!is_int($issued_at) && !(is_string($issued_at) && preg_match('/^[0-9]+$/', $issued_at))) {
-            return '';
-        }
-        $issued = (string) (int) $issued_at;
-        if ((int) $issued <= 0) {
-            return '';
-        }
-        return implode("\n", array(
-            self::CANONICAL_VERSION,
-            $verb,
-            $client_id,
-            $origin,
-            $redirect_uri,
-            $issued,
-        ));
-    }
-
-    /**
-     * base64url(HMAC-SHA256(canonical)) with the padding removed.
+     * Registration has no signature. Connect returns the shop secret once.
      *
-     * @param mixed $verb
-     * @param mixed $client_id
      * @param mixed $origin
      * @param mixed $redirect_uri
-     * @param mixed $issued_at
-     * @param mixed $hmac_key
-     * @return string
+     * @return array<string,string>
      */
-    public static function sign($verb, $client_id, $origin, $redirect_uri, $issued_at, $hmac_key) {
-        $message = self::canonical_message($verb, $client_id, $origin, $redirect_uri, $issued_at);
-        if ($message === '' || !is_string($hmac_key) || $hmac_key === '') {
-            return '';
-        }
-        return self::base64url(hash_hmac('sha256', $message, $hmac_key, true));
-    }
-
-    /**
-     * @param mixed $verb
-     * @param mixed $origin
-     * @param mixed $redirect_uri
-     * @param mixed $issued_at
-     * @param mixed $hmac_key
-     * @return array<string,mixed>
-     */
-    public static function signed_shop_body($verb, $origin, $redirect_uri, $issued_at, $hmac_key) {
-        $signature = self::sign($verb, self::CLIENT_ID, $origin, $redirect_uri, $issued_at, $hmac_key);
-        if ($signature === '') {
-            return array();
-        }
+    public static function register_body($origin, $redirect_uri) {
         return array(
             'client_id' => self::CLIENT_ID,
-            'shop_url' => $origin,
-            'redirect_uri' => $redirect_uri,
-            'issued_at' => (int) $issued_at,
-            'signature' => $signature,
+            'shop_url' => is_string($origin) ? $origin : '',
+            'redirect_uri' => is_string($redirect_uri) ? $redirect_uri : '',
         );
     }
 
     /**
-     * @param int $status
-     * @return bool 2xx, or 409 when this shop was already registered.
+     * The secret from a 200 registration is shown once. Reuse it when this
+     * issuer and return address are unchanged.
+     *
+     * @param mixed $account
+     * @param mixed $issuer
+     * @param mixed $redirect_uri
+     * @return bool
      */
-    public static function register_accepted($status) {
-        $status = (int) $status;
-        return ($status >= 200 && $status < 300) || $status === 409;
+    public static function registration_reusable($account, $issuer, $redirect_uri) {
+        if (!is_array($account) || !self::is_allowed_issuer($issuer) || !is_string($redirect_uri) || $redirect_uri === '') {
+            return false;
+        }
+        if (($account['issuer'] ?? '') !== $issuer || ($account['redirect_uri'] ?? '') !== $redirect_uri) {
+            return false;
+        }
+        if (($account['shop_status'] ?? '') === 'pending') {
+            return false;
+        }
+        $shop_id = $account['shop_id'] ?? '';
+        $shop_secret = $account['shop_secret'] ?? '';
+        return is_string($shop_id) && $shop_id !== '' && is_string($shop_secret) && $shop_secret !== '';
+    }
+
+    /**
+     * @param mixed $data
+     * @param mixed $expected_origin
+     * @param mixed $expected_redirect
+     * @return array{ok:bool,error?:string,shop_id?:string,shop_secret?:string,status?:string}
+     */
+    public static function parse_registration($data, $expected_origin, $expected_redirect) {
+        if (!is_array($data)) {
+            return array('ok' => false, 'error' => 'registration_unreadable');
+        }
+        if (isset($data['client_id']) && $data['client_id'] !== self::CLIENT_ID) {
+            return array('ok' => false, 'error' => 'registration_client');
+        }
+        if (isset($data['shop_origin']) && $data['shop_origin'] !== $expected_origin) {
+            return array('ok' => false, 'error' => 'registration_origin');
+        }
+        if (isset($data['redirect_uri']) && $data['redirect_uri'] !== $expected_redirect) {
+            return array('ok' => false, 'error' => 'registration_redirect');
+        }
+        $status = isset($data['status']) ? (string) $data['status'] : '';
+        if ($status !== 'active' && $status !== 'pending') {
+            return array('ok' => false, 'error' => 'registration_status');
+        }
+        $shop_id = isset($data['shop_id']) ? (string) $data['shop_id'] : '';
+        $shop_secret = isset($data['shop_secret']) ? (string) $data['shop_secret'] : '';
+        if (!preg_match('/^[A-Za-z0-9._:-]{8,128}$/', $shop_id)) {
+            return array('ok' => false, 'error' => 'registration_invalid');
+        }
+        if (strlen($shop_secret) < 16 || strlen($shop_secret) > 256 || preg_match('/[\s\x00-\x1F]/', $shop_secret)) {
+            return array('ok' => false, 'error' => 'registration_invalid');
+        }
+        return array(
+            'ok' => true,
+            'shop_id' => $shop_id,
+            'shop_secret' => $shop_secret,
+            'status' => $status,
+        );
+    }
+
+    /**
+     * @param mixed $shop_id
+     * @param mixed $shop_secret
+     * @return array<string,string>
+     */
+    public static function shop_revoke_body($shop_id, $shop_secret) {
+        return array(
+            'client_id' => self::CLIENT_ID,
+            'shop_id' => is_string($shop_id) ? $shop_id : '',
+            'shop_secret' => is_string($shop_secret) ? $shop_secret : '',
+        );
     }
 
     /**
@@ -284,14 +272,16 @@ class Kiyoh_Connect {
      * @param mixed $code
      * @param mixed $verifier
      * @param mixed $redirect_uri
-     * @param mixed $client_secret
+     * @param mixed $shop_id
+     * @param mixed $shop_secret
      * @return array<string,string>
      */
-    public static function authorization_code_form($code, $verifier, $redirect_uri, $client_secret) {
+    public static function authorization_code_form($code, $verifier, $redirect_uri, $shop_id, $shop_secret) {
         return array(
             'grant_type' => 'authorization_code',
             'client_id' => self::CLIENT_ID,
-            'client_secret' => is_string($client_secret) ? $client_secret : '',
+            'shop_id' => is_string($shop_id) ? $shop_id : '',
+            'shop_secret' => is_string($shop_secret) ? $shop_secret : '',
             'code' => is_string($code) ? $code : '',
             'code_verifier' => is_string($verifier) ? $verifier : '',
             'redirect_uri' => is_string($redirect_uri) ? $redirect_uri : '',
@@ -300,29 +290,32 @@ class Kiyoh_Connect {
 
     /**
      * @param mixed $refresh_token
-     * @param mixed $client_secret
+     * @param mixed $shop_id
+     * @param mixed $shop_secret
      * @return array<string,string>
      */
-    public static function refresh_token_form($refresh_token, $client_secret) {
+    public static function refresh_token_form($refresh_token, $shop_id, $shop_secret) {
         return array(
             'grant_type' => 'refresh_token',
-            'client_id' => self::CLIENT_ID,
-            'client_secret' => is_string($client_secret) ? $client_secret : '',
             'refresh_token' => is_string($refresh_token) ? $refresh_token : '',
+            'client_id' => self::CLIENT_ID,
+            'shop_id' => is_string($shop_id) ? $shop_id : '',
+            'shop_secret' => is_string($shop_secret) ? $shop_secret : '',
         );
     }
 
     /**
      * @param mixed $token
-     * @param mixed $client_secret
+     * @param mixed $shop_id
+     * @param mixed $shop_secret
      * @return array<string,string>
      */
-    public static function revoke_token_form($token, $client_secret) {
+    public static function revoke_token_form($token, $shop_id, $shop_secret) {
         return array(
             'token' => is_string($token) ? $token : '',
-            'token_type_hint' => 'refresh_token',
             'client_id' => self::CLIENT_ID,
-            'client_secret' => is_string($client_secret) ? $client_secret : '',
+            'shop_id' => is_string($shop_id) ? $shop_id : '',
+            'shop_secret' => is_string($shop_secret) ? $shop_secret : '',
         );
     }
 
@@ -506,7 +499,7 @@ class Kiyoh_Connect {
     public static function oauth_error_message($error) {
         $map = array(
             'access_denied' => 'The sign-in was cancelled.',
-            'invalid_client' => 'Kiyoh-Connect rejected the client secret configured for this shop.',
+            'invalid_client' => 'Kiyoh-Connect rejected this shop secret. Connect again.',
             'invalid_grant' => 'The sign-in code expired. Start again from WooCommerce, then Kiyoh.',
             'invalid_request' => 'Kiyoh-Connect rejected the sign-in request.',
             'unauthorized_client' => 'This shop is not allowed to use Kiyoh-Connect.',

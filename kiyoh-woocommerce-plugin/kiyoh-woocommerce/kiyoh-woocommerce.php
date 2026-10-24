@@ -27,11 +27,6 @@ if (!defined('WPINC')) {
  */
 define('KIYOH_WOOCOMMERCE_VERSION', '1.4.0');
 
-/**
- * Kiyoh-Connect secrets are read from wp-config.php or the environment.
- * Do not put values in this file. Both are required for the Connect button:
- * KIYOH_CONNECT_HMAC_KEY and KIYOH_CONNECT_CLIENT_SECRET.
- */
 define('KIYOH_WOOCOMMERCE_PLUGIN_FILE', __FILE__);
 define('KIYOH_WOOCOMMERCE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('KIYOH_WOOCOMMERCE_PLUGIN_URL', plugin_dir_url(__FILE__));

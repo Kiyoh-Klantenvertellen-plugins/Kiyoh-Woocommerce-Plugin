@@ -32,7 +32,6 @@ if (is_array($connect_flash)) {
 }
 $connect_query = isset($_GET['kiyoh_connect']) ? sanitize_key(wp_unslash($_GET['kiyoh_connect'])) : ''; // preflight: ignore — allow-listed to connected or error before display
 $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(home_url('/')) : '';
-$connect_secrets_ready = class_exists('Kiyoh_Connect_Session') && Kiyoh_Connect_Session::secrets_configured();
 ?>
 
 <div class="wrap kiyoh-admin-settings">
@@ -139,11 +138,7 @@ $connect_secrets_ready = class_exists('Kiyoh_Connect_Session') && Kiyoh_Connect_
                                 </button>
                             <?php endif; ?>
                             <div id="kiyoh-connect-results" style="margin-top: 10px;"></div>
-                            <?php if (!$connect_secrets_ready): ?>
-                                <p class="description"><?php esc_html_e('Connect sign-in needs KIYOH_CONNECT_HMAC_KEY and KIYOH_CONNECT_CLIENT_SECRET in wp-config.php. Those secrets are not included in the plugin. You can still paste a Location ID and API key.', 'kiyoh-woocommerce'); ?></p>
-                            <?php else: ?>
-                                <p class="description"><?php esc_html_e('Opens Kiyoh-Connect so the merchant can sign in and pick a location. An existing install can ignore this and keep the Location ID and API key below.', 'kiyoh-woocommerce'); ?></p>
-                            <?php endif; ?>
+                            <p class="description"><?php esc_html_e('Opens Kiyoh-Connect so the merchant can sign in and pick a location. The shop must use HTTPS and pretty permalinks. An existing install can ignore this and keep the Location ID and API key below.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
                     
