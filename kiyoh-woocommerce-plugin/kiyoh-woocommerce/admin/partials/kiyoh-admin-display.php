@@ -168,7 +168,7 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                         </th>
                         <td>
                             <input type="text" id="mobile_urls" name="kiyoh_woocommerce_settings[general][mobile_urls]" value="<?php echo esc_attr(isset($settings['general']['mobile_urls']) ? $settings['general']['mobile_urls'] : ''); ?>" class="regular-text" />
-                            <p class="description"><?php esc_html_e('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to report to https://kiyoh-mobile.com and https://kiyohmobileui-staging.up.railway.app.', 'kiyoh-woocommerce'); ?></p>
+                            <p class="description"><?php esc_html_e('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to report only to https://kiyoh-mobile.com. Testers: enter https://kiyohmobileui-staging.up.railway.app.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
                     

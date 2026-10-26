@@ -1,9 +1,9 @@
 # Changelog
 
-## v1.4.0-rc2
+## v1.4.1
 
 ### Fixed
-- **A connected shop did not show on the Kiyoh Mobile staging plugins page.** A blank **Kiyoh Mobile URL(s)** field reported only to `https://kiyoh-mobile.com`. It now uses the same pair as the other plugins: `https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app`. A non-blank field still replaces that list.
+- **Kiyoh Mobile URL(s)** help text: a blank field reports only to `https://kiyoh-mobile.com`, so live shops never post to staging. To test against staging, enter `https://kiyohmobileui-staging.up.railway.app` in the field (a non-blank field replaces the default).
 - The health body includes `webhooks.lastReceivedAt` (`null`, because WooCommerce does not receive platform webhooks). The staging plugins page reads that field on every card.
 - **Connect with Kiyoh / Klantenvertellen** marks the connection ok and sends the report after the location and invite key are saved, including when those values did not change (WordPress then skips the settings-update hook). A failed health call still does not stop Connect, invites, or checkout.
 

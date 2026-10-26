@@ -4,7 +4,7 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.4.0-rc2
+Stable tag: 1.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
@@ -37,8 +37,8 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 
 == Changelog ==
 
-= 1.4.0-rc2 =
-* A blank Kiyoh Mobile URL(s) field reports to https://kiyoh-mobile.com and https://kiyohmobileui-staging.up.railway.app, so the shop shows on the staging plugins page.
+= 1.4.1 =
+* A blank Kiyoh Mobile URL(s) field reports only to https://kiyoh-mobile.com. Live shops never report to staging; testers enter https://kiyohmobileui-staging.up.railway.app in the field.
 * The health report includes webhooks.lastReceivedAt (null). Connect sends the report after the location and invite key are saved and marks the connection ok.
 
 = 1.4.0 =

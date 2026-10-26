@@ -1,7 +1,7 @@
 # PLUGIN_SPEC — Kiyoh WooCommerce
 
 **Shape:** A + B (WordPress/WooCommerce plugin and Kiyoh / Kiyoh-Connect / Kiyoh Mobile connector)
-**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.0-rc2
+**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.1
 
 ## Host
 - Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.2.1). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.
@@ -27,7 +27,7 @@
   - Refresh form: `grant_type=refresh_token`, `refresh_token`, `client_id`, `shop_id`, `shop_secret`. A new refresh token replaces the stored one.
   - `POST {issuer}/revoke` form: `token`, `client_id`, `shop_id`, `shop_secret`.
   - `POST {issuer}/shops/revoke` JSON: `client_id`, `shop_id`, `shop_secret`. Disconnect and uninstall both send this after the token revoke. If the shop secret cannot be decrypted, the remote revoke is skipped and local data is still deleted.
-- Kiyoh Mobile health: `KIYOH_MOBILE_URLS` (default `https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app`), overridden by the setting, overridden by the `kiyoh_mobile_urls` filter. `POST /api/integrations/health`. Body includes `webhooks.lastReceivedAt` (null; this plugin has no webhook receiver).
+- Kiyoh Mobile health: `KIYOH_MOBILE_URLS` (default `https://kiyoh-mobile.com` only; testers set staging in the field), overridden by the setting, overridden by the `kiyoh_mobile_urls` filter. `POST /api/integrations/health`. Body includes `webhooks.lastReceivedAt` (null; this plugin has no webhook receiver).
 - Auth: Connect is OAuth 2.1 authorization code + PKCE with a per-shop secret. The publication API uses the invite key from Connect, or a manually pasted key.
 - Rate limits: Connect and Mobile 429 honour `Retry-After`, else `retryAfterSeconds`. Interactive Connect calls stop after 3 attempts or when the wait is over 8 seconds. Backoff cap is 60 seconds. A register 429 tells the merchant to wait. Publication calls are not given a 5-attempt hang inside checkout.
 - Webhooks: none. This plugin does not receive webhooks.
@@ -53,7 +53,7 @@
 
 ## Config precedence
 - Connect has no wp-config secret. `shop_url` is the https origin of the shop. The issuer is chosen only by the platform setting. It is not a free-text URL.
-- Mobile URLs: `kiyoh_mobile_urls` filter, else a non-blank setting, else `KIYOH_MOBILE_URLS`, else `https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app`.
+- Mobile URLs: `kiyoh_mobile_urls` filter, else a non-blank setting, else `KIYOH_MOBILE_URLS`, else `https://kiyoh-mobile.com`.
 
 ## Security checklist
 - Secrets: no shared HMAC key and no client secret in the zip, JavaScript, logs, or authorize URL. The per-shop secret and the refresh and access tokens are encrypted. Editing the Location ID or API key clears the refresh and access tokens and stops automatic overwrite; the shop secret stays so the same return address can connect again.

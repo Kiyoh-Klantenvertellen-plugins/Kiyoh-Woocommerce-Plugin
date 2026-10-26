@@ -11,7 +11,7 @@ class Kiyoh_Mobile_Health {
     const PLATFORM = 'woocommerce';
     const HEALTH_PATH = '/api/integrations/health';
     /** Production and staging. A blank setting uses this list, same as the other plugins. */
-    const DEFAULT_URLS = 'https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app';
+    const DEFAULT_URLS = 'https://kiyoh-mobile.com';
     const HEADER_PUBLICATION = 'X-Publication-Api-Token';
     const HEADER_LOCATION = 'X-Location-Id';
     const CRON_HOOK = 'kiyoh_report_mobile_health';

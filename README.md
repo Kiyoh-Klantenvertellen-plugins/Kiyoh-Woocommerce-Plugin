@@ -243,7 +243,7 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.4.0-rc2  
+**Version**: 1.4.1  
 **Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary
@@ -263,7 +263,7 @@ The plugin tells Kiyoh Mobile whether this shop is connected, when invites and p
 
 On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to report to both:
 
-`https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app`
+`https://kiyoh-mobile.com` (testers enter `https://kiyohmobileui-staging.up.railway.app`)
 
 The same list can be set with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter. A non-blank setting overrides the constant. The filter overrides both. The report uses the saved API key and Location ID. Each URL gets one short request at the end of the page load. If Kiyoh Mobile does not answer, invitations and checkout still finish.
 

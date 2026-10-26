@@ -33,15 +33,16 @@ $production = 'https://kiyoh-mobile.com';
 $staging = 'https://kiyohmobileui-staging.up.railway.app';
 
 expect_same(
-    array($production, $staging),
+    array($production),
     Kiyoh_Mobile_Health::resolve_base_urls('', ''),
-    'blank setting and constant report to production and staging'
+    'blank setting and constant report only to production'
 );
 expect_same(
-    'https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app',
+    'https://kiyoh-mobile.com',
     Kiyoh_Mobile_Health::DEFAULT_URLS,
-    'the default list is the same pair the other plugins use'
+    'the default never includes staging'
 );
+expect_same(array($staging), Kiyoh_Mobile_Health::resolve_base_urls($staging, ''), 'testers can set staging in the field');
 expect_same(array($production), Kiyoh_Mobile_Health::resolve_base_urls('  ', $production), 'blank setting keeps the constant');
 expect_same(
     array($production, $staging),
