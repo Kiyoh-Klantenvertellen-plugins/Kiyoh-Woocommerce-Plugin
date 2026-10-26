@@ -261,7 +261,7 @@ For technical support:
 
 The plugin tells Kiyoh Mobile whether this shop is connected, when invites and product sync last succeeded, and whether Kiyoh ministars are shown. That report is sent when Connect saves the location and invite key, when you save settings, test the connection, send or fail an invite, or sync products, and again once a day.
 
-On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to report to both:
+On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to report only to production:
 
 `https://kiyoh-mobile.com` (testers enter `https://kiyohmobileui-staging.up.railway.app`)
 

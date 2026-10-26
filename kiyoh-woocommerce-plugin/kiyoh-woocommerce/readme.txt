@@ -49,7 +49,7 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 
 = 1.3.0 =
 * Shop health is reported to Kiyoh Mobile (connection, invites, product sync, ministars).
-* Kiyoh Mobile URL(s) on WooCommerce → Kiyoh → General accepts a comma-separated list. Blank uses https://kiyoh-mobile.com and https://kiyohmobileui-staging.up.railway.app.
+* Kiyoh Mobile URL(s) on WooCommerce → Kiyoh → General accepts a comma-separated list. Blank uses https://kiyoh-mobile.com (changed in 1.4.1; staging was included in 1.3.0–1.4.0).
 * Reports are sent on settings save, connection test, invite sent or failed, product sync, and a daily cron. Unchanged reports are sent again after 24 hours.
 * The health request uses a 2-second timeout, honors HTTP 429, and does not block invitations or checkout when it fails.
 
