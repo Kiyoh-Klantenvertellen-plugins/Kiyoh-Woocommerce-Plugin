@@ -62,6 +62,7 @@ class Kiyoh_Deactivator {
         }
         wp_clear_scheduled_hook('kiyoh_sync_product_ratings');
         wp_clear_scheduled_hook('kiyoh_process_rating_sync');
+        wp_clear_scheduled_hook('kiyoh_report_mobile_health');
 
         // Stop send-time jobs while the plugin is inactive. Rows stay scheduled
         // and are queued again on the next activation.
@@ -82,13 +83,27 @@ class Kiyoh_Deactivator {
      */
     private static function clear_cache() {
         global $wpdb;
-        
-        // Clear review cache table
-        $table_name = $wpdb->prefix . 'kiyoh_review_cache';
-        $wpdb->query("TRUNCATE TABLE $table_name");
-        
-        // Clear any WordPress transients
-        $wpdb->query("DELETE FROM {$wpdb->options} WHERE option_name LIKE '_transient_kiyoh_%' OR option_name LIKE '_transient_timeout_kiyoh_%'");
+
+        if (!class_exists('Kiyoh_Db')) {
+            require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-db.php';
+        }
+
+        $table_name = Kiyoh_Db::table($wpdb->prefix, 'kiyoh_review_cache');
+        if ($table_name !== '') {
+            $wpdb->query('TRUNCATE TABLE ' . $table_name);
+        }
+
+        $options_table = Kiyoh_Db::options_table($wpdb->options);
+        if ($options_table !== '') {
+            $sql = $wpdb->prepare(
+                'DELETE FROM ' . $options_table . ' WHERE option_name LIKE %s OR option_name LIKE %s',
+                $wpdb->esc_like('_transient_kiyoh_') . '%',
+                $wpdb->esc_like('_transient_timeout_kiyoh_') . '%'
+            );
+            if (is_string($sql)) {
+                $wpdb->query($sql);
+            }
+        }
 
         delete_option('kiyoh_ratings_sync_job');
     }

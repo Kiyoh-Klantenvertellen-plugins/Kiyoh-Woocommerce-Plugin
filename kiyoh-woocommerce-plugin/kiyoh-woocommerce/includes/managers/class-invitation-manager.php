@@ -265,20 +265,52 @@ class Kiyoh_Invitation_Manager {
         try {
             $api_client = $this->get_api_client();
             if (!$api_client) {
-                return array('success' => false, 'error_code' => 'API_CLIENT_ERROR', 'message' => 'API client not available');
+                $result = array('success' => false, 'error_code' => 'API_CLIENT_ERROR', 'message' => 'API client not available', 'http_status' => null);
+                $this->report_invite_health($result);
+                return $result;
             }
 
             $data['product_invite'] = $product_invite_flag;
 
             $response = $api_client->send_invitation($data);
-            
+            $http_status = $response->get_response_code();
+
             if ($response->is_success()) {
-                return array('success' => true, 'error_code' => null, 'message' => 'Invitation sent successfully');
+                $result = array('success' => true, 'error_code' => null, 'message' => 'Invitation sent successfully', 'http_status' => $http_status);
             } else {
-                return array('success' => false, 'error_code' => $response->get_error_code(), 'message' => $response->get_error());
+                $result = array(
+                    'success' => false,
+                    'error_code' => $response->get_error_code(),
+                    'message' => $response->get_error(),
+                    'http_status' => $http_status,
+                );
             }
+            $this->report_invite_health($result);
+            return $result;
         } catch (Exception $e) {
-            return array('success' => false, 'error_code' => 'EXCEPTION', 'message' => $e->getMessage());
+            $result = array('success' => false, 'error_code' => 'EXCEPTION', 'message' => $e->getMessage(), 'http_status' => null);
+            $this->report_invite_health($result);
+            return $result;
+        }
+    }
+
+    /**
+     * Health reporting must not change the invite result or throw into checkout.
+     *
+     * @param array $result
+     */
+    private function report_invite_health($result) {
+        try {
+            if (!class_exists('Kiyoh_Mobile_Health_Reporter')) {
+                return;
+            }
+            Kiyoh_Mobile_Health_Reporter::instance()->note_invite(
+                !empty($result['success']),
+                isset($result['message']) ? $result['message'] : null,
+                isset($result['http_status']) ? $result['http_status'] : null
+            );
+        } catch (Throwable $e) {
+            error_log('Kiyoh Mobile Health: invite note failed: ' . $e->getMessage());
         }
     }
 

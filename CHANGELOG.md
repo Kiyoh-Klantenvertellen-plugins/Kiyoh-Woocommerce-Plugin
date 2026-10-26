@@ -1,5 +1,26 @@
 # Changelog
 
+## v1.4.0
+
+### Added
+- **Connect with Kiyoh / Klantenvertellen** on WooCommerce → Kiyoh → General. The button talks to Kiyoh-Connect 1.2.0 (`https://connect.kiyoh.com` for Kiyoh, tenant 98, or `https://connect.klantenvertellen.nl` for Klantenvertellen, tenant 99), opens the sign-in popup, and returns to `https://{shop-host}/wp-json/kiyoh/v1/oauth/callback`. Client id `kiyoh-woocommerce`, scope `integration:connect`, PKCE S256 and `state`.
+- The first click registers the shop with `POST /shops/register` (`client_id`, `shop_url`, `redirect_uri`, no signature). Connect returns `shop_id` and `shop_secret` once. Both are stored encrypted. The same return address skips registration and reuses that secret. A new registration returns a pending secret that replaces the stored one only after the code exchange succeeds.
+- After sign-in, `locationId` and `inviteApiKey` from `GET /integration/credentials` are saved as the Location ID and API key. Token, refresh, and revoke calls send `shop_id` and `shop_secret`. A publication HTTP 401 refreshes once and retries. Disconnect and uninstall revoke the token and the shop registration.
+- The Location ID and API key fields stay as the fallback for existing installs. Editing either field switches the shop back to the manual key so a later refresh cannot overwrite it.
+- `uninstall.php` revokes the Connect shop and removes plugin options, custom tables, cron, and `kiyoh_` transients. Deactivation still keeps settings, Connect tokens, invitations, and product-sync rows.
+
+### Security
+- There is no shared HMAC key and no OAuth client secret. Nothing has to be added to `wp-config.php` for Connect. The per-shop secret stays encrypted and is not sent on the authorize URL.
+- The six unprepared SQL calls now use a whitelisted table name. Query values go through `$wpdb->prepare`.
+
+## v1.3.0
+
+### Added
+- **Kiyoh Mobile shop health.** The plugin posts to `POST {url}/api/integrations/health` for each base URL in **WooCommerce → Kiyoh → General → Kiyoh Mobile URL(s)** (comma-separated). Leave the field blank to use the `KIYOH_MOBILE_URLS` constant, which defaults to `https://kiyoh-mobile.com`. The `kiyoh_mobile_urls` filter overrides both. Add `https://kiyohmobileui-staging.up.railway.app` when a shop should also report to staging.
+- Headers are `X-Publication-Api-Token` and `X-Location-Id` from the saved API key and Location ID. The body uses `platform=woocommerce`, `shopId` set to the site domain, and `pluginVersion`. Groups are `connection`, `invites` (`lastOkAt`, `failures24h`), `productSync` (including up to 500 product codes), and `widget` (`injected` when Kiyoh ministars are active).
+- A report is queued when settings are saved, credentials change, the connection test finishes, an invite is sent or fails, or products are synced. Those events share one HTTP call per URL at the end of the request. A daily WP-Cron event (`kiyoh_report_mobile_health`) sends again when the payload changed or the last success is older than 24 hours, so the server heartbeat stays inside the 48-hour stale window.
+- The call is `wp_remote_post` with a 2-second timeout. HTTP 429 stores `Retry-After` (or `retryAfterSeconds`) and does not retry until that time. A health failure is logged and does not change invite or checkout behaviour. Reports are skipped when the API key or Location ID is missing. Clearing credentials stops the heartbeat; Kiyoh Mobile then shows the shop as stale after 48 hours.
+
 ## v1.2.1
 
 ### Changed

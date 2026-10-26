@@ -4,7 +4,7 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.2.1
+Stable tag: 1.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
@@ -25,11 +25,29 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 == Installation ==
 
 1. Upload the plugin to `/wp-content/plugins/kiyoh-woocommerce/` and activate it. WooCommerce must be active. PHP 8.2 or newer is required.
-2. Open WooCommerce → Kiyoh and enter the Location ID and API key.
+2. Open WooCommerce → Kiyoh. Click **Connect with Kiyoh / Klantenvertellen**, or enter the Location ID and API key for an existing install. Connect does not need extra values in `wp-config.php`. The shop must use HTTPS and pretty permalinks.
 3. Save, then run Bulk Sync Products once.
 4. Choose the order status that should send a review invitation.
 
+== Permissions and data ==
+
+* Settings, Connect, disconnect, the connection test, and sync require `manage_woocommerce`.
+* The plugin stores the Location ID, invite API key, invitation rules, product-sync rows, a review cache, and the encrypted Connect shop secret and refresh token.
+* Deactivate keeps that data and stops scheduled jobs. Delete removes options, tables, cron, and transients, and revokes the shop at Kiyoh-Connect.
+
 == Changelog ==
+
+= 1.4.0 =
+* Connect with Kiyoh / Klantenvertellen via Kiyoh-Connect 1.2.0 (public client, per-shop secret, return to /wp-json/kiyoh/v1/oauth/callback). The manual Location ID and API key remain for existing installs.
+* No wp-config secret is required. The shop secret from registration is stored encrypted and reused while the return address stays the same.
+* Uninstall removes plugin data and revokes the Connect shop. Deactivate keeps settings and tokens.
+* Remaining direct SQL uses whitelisted table names and $wpdb->prepare for values.
+
+= 1.3.0 =
+* Shop health is reported to Kiyoh Mobile (connection, invites, product sync, ministars).
+* Kiyoh Mobile URL(s) on WooCommerce → Kiyoh → General accepts a comma-separated list. Blank uses https://kiyoh-mobile.com.
+* Reports are sent on settings save, connection test, invite sent or failed, product sync, and a daily cron. Unchanged reports are sent again after 24 hours.
+* The health request uses a 2-second timeout, honors HTTP 429, and does not block invitations or checkout when it fails.
 
 = 1.2.1 =
 * Tested up to WordPress 7.1.3 and WooCommerce 11.2.1.

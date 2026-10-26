@@ -19,15 +19,50 @@ if (!class_exists('WooCommerce')) {
 }
 
 $settings = get_option('kiyoh_woocommerce_settings', array());
-$active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general';
+$active_tab = isset($_GET['tab']) ? sanitize_text_field(wp_unslash($_GET['tab'])) : 'general'; // preflight: ignore — sanitized, then escaped when printed in the nav
+$connect_account = get_option('kiyoh_connect_account', array());
+if (!is_array($connect_account)) {
+    $connect_account = array();
+}
+$credential_source = (isset($settings['general']['credential_source']) && $settings['general']['credential_source'] === 'connect') ? 'connect' : 'manual';
+$connect_status = isset($connect_account['status']) ? (string) $connect_account['status'] : '';
+$connect_flash = get_transient('kiyoh_connect_flash');
+if (is_array($connect_flash)) {
+    delete_transient('kiyoh_connect_flash');
+}
+$connect_query = isset($_GET['kiyoh_connect']) ? sanitize_key(wp_unslash($_GET['kiyoh_connect'])) : ''; // preflight: ignore — allow-listed to connected or error before display
+$callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(home_url('/')) : '';
 ?>
 
 <div class="wrap kiyoh-admin-settings">
     <h1><?php echo esc_html(get_admin_page_title()); ?></h1>
     
-    <?php if (isset($_GET['settings-updated']) && $_GET['settings-updated']): ?>
+    <?php if (isset($_GET['settings-updated']) && $_GET['settings-updated']): // preflight: ignore — presence check only; the notice text is a fixed translated string ?>
         <div class="notice notice-success is-dismissible">
             <p><?php _e('Settings saved successfully!', 'kiyoh-woocommerce'); ?></p>
+        </div>
+    <?php endif; ?>
+
+    <?php
+    $connect_notice = '';
+    $connect_notice_ok = false;
+    if ($connect_query === 'connected') {
+        $connect_notice_ok = true;
+        $connect_notice = (is_array($connect_flash) && !empty($connect_flash['message']))
+            ? $connect_flash['message']
+            : __('Connected with Kiyoh-Connect. The location and invite key are saved.', 'kiyoh-woocommerce');
+    } elseif ($connect_query === 'error') {
+        $connect_notice = (is_array($connect_flash) && !empty($connect_flash['message']))
+            ? $connect_flash['message']
+            : __('Kiyoh-Connect could not complete the sign-in.', 'kiyoh-woocommerce');
+    } elseif (is_array($connect_flash) && !empty($connect_flash['message'])) {
+        $connect_notice_ok = !empty($connect_flash['ok']);
+        $connect_notice = $connect_flash['message'];
+    }
+    ?>
+    <?php if ($connect_notice !== ''): ?>
+        <div class="notice <?php echo $connect_notice_ok ? 'notice-success' : 'notice-error'; ?> is-dismissible">
+            <p><?php echo esc_html($connect_notice); ?></p>
         </div>
     <?php endif; ?>
     
@@ -79,6 +114,33 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
                             <p class="description"><?php _e('Select your review platform', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
+
+                    <tr>
+                        <th scope="row"><?php esc_html_e('Kiyoh-Connect', 'kiyoh-woocommerce'); ?></th>
+                        <td>
+                            <?php if ($credential_source === 'connect' && $connect_status === 'broken'): ?>
+                                <p><strong><?php esc_html_e('Kiyoh-Connect could not refresh this shop. Connect again, or paste a key below.', 'kiyoh-woocommerce'); ?></strong></p>
+                            <?php elseif ($credential_source === 'connect'): ?>
+                                <p><strong><?php esc_html_e('Connected with Kiyoh-Connect.', 'kiyoh-woocommerce'); ?></strong>
+                                    <?php if (!empty($connect_account['location_name'])): ?>
+                                        <?php echo esc_html($connect_account['location_name']); ?>
+                                    <?php endif; ?>
+                                </p>
+                            <?php else: ?>
+                                <p><?php esc_html_e('Using a manually entered API key, or not connected yet.', 'kiyoh-woocommerce'); ?></p>
+                            <?php endif; ?>
+                            <button type="button" class="button button-primary" id="kiyoh-connect-start">
+                                <?php esc_html_e('Connect with Kiyoh / Klantenvertellen', 'kiyoh-woocommerce'); ?>
+                            </button>
+                            <?php if ($credential_source === 'connect'): ?>
+                                <button type="button" class="button" id="kiyoh-connect-disconnect">
+                                    <?php esc_html_e('Disconnect Kiyoh-Connect', 'kiyoh-woocommerce'); ?>
+                                </button>
+                            <?php endif; ?>
+                            <div id="kiyoh-connect-results" style="margin-top: 10px;"></div>
+                            <p class="description"><?php esc_html_e('Opens Kiyoh-Connect so the merchant can sign in and pick a location. The shop must use HTTPS and pretty permalinks. An existing install can ignore this and keep the Location ID and API key below.', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
                     
                     <tr>
                         <th scope="row">
@@ -96,7 +158,17 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
                         </th>
                         <td>
                             <input type="password" id="api_key" name="kiyoh_woocommerce_settings[general][api_key]" value="<?php echo esc_attr(isset($settings['general']['api_key']) ? $settings['general']['api_key'] : ''); ?>" class="regular-text" />
-                            <p class="description"><?php _e('Your API key from your Kiyoh/Klantenvertellen account', 'kiyoh-woocommerce'); ?></p>
+                            <p class="description"><?php esc_html_e('Filled by Connect, or paste a key from an existing install. Editing either field switches this shop back to the manual key.', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
+
+                    <tr>
+                        <th scope="row">
+                            <label for="mobile_urls"><?php esc_html_e('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <input type="text" id="mobile_urls" name="kiyoh_woocommerce_settings[general][mobile_urls]" value="<?php echo esc_attr(isset($settings['general']['mobile_urls']) ? $settings['general']['mobile_urls'] : ''); ?>" class="regular-text" />
+                            <p class="description"><?php esc_html_e('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to use the default https://kiyoh-mobile.com. Example with staging: https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
                     
@@ -501,9 +573,12 @@ $active_tab = isset($_GET['tab']) ? sanitize_text_field($_GET['tab']) : 'general
 </div>
 
 <script type="text/javascript">
-// Pass PHP data to JavaScript
-window.kiyohAdminData = {
-    hasCredentials: <?php echo json_encode(!empty($settings['general']['location_id']) && !empty($settings['general']['api_key'])); ?>,
-    activeTab: '<?php echo esc_js($active_tab); ?>'
-};
+window.kiyohAdminData = <?php echo wp_json_encode(array(
+    'hasCredentials' => !empty($settings['general']['location_id']) && !empty($settings['general']['api_key']),
+    'activeTab' => $active_tab,
+    'connectStartNonce' => wp_create_nonce('kiyoh_connect_start'),
+    'connectDisconnectNonce' => wp_create_nonce('kiyoh_connect_disconnect'),
+    'callbackOrigin' => $callback_origin,
+    'settingsUrl' => admin_url('admin.php?page=kiyoh-settings&tab=general'),
+)); ?>;
 </script>

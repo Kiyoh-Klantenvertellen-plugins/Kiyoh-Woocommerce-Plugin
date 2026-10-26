@@ -22,6 +22,7 @@
             this.initTabs();
             this.validateForm();
             this.initRatingSyncStatus();
+            this.listenForConnect();
         },
 
         bindEvents: function () {
@@ -50,6 +51,101 @@
 
             // Multi-select helpers
             $(document).on('dblclick', 'select[multiple] option', this.handleMultiSelectDblClick);
+
+            $(document).on('click', '#kiyoh-connect-start', this.handleConnectStart);
+            $(document).on('click', '#kiyoh-connect-disconnect', this.handleConnectDisconnect);
+        },
+
+        listenForConnect: function () {
+            window.addEventListener('message', function (event) {
+                if (!window.kiyohAdminData || !window.kiyohAdminData.callbackOrigin) {
+                    return;
+                }
+                if (event.origin !== window.kiyohAdminData.callbackOrigin) {
+                    return;
+                }
+                var data = event.data || {};
+                if (data.source !== 'kiyoh-connect') {
+                    return;
+                }
+                if (data.ok) {
+                    var url = window.kiyohAdminData.settingsUrl || window.location.href;
+                    window.location = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'kiyoh_connect=connected';
+                    return;
+                }
+                KiyohAdmin.showConnectResult('error', data.message || 'Kiyoh-Connect could not complete the sign-in.');
+            });
+        },
+
+        showConnectResult: function (type, message) {
+            var notice = $('<div class="notice"></div>').addClass(type === 'success' ? 'notice-success' : 'notice-error');
+            notice.append($('<p></p>').text(message || ''));
+            $('#kiyoh-connect-results').empty().append(notice);
+        },
+
+        handleConnectStart: function (e) {
+            e.preventDefault();
+            if (!window.kiyoh_admin_ajax || !window.kiyohAdminData) {
+                return;
+            }
+            var popup = window.open('', 'kiyoh_connect', 'width=520,height=760');
+            $('#kiyoh-connect-start').prop('disabled', true);
+            $.post(kiyoh_admin_ajax.ajax_url, {
+                action: 'kiyoh_connect_start',
+                nonce: kiyohAdminData.connectStartNonce,
+                platform: $('#platform').val() || 'kiyoh'
+            }).done(function (response) {
+                var url = response && response.success && response.data ? response.data.authorize_url : '';
+                if (!url) {
+                    if (popup) {
+                        popup.close();
+                    }
+                    var message = response && response.data && response.data.message ? response.data.message : 'Kiyoh-Connect could not start.';
+                    KiyohAdmin.showConnectResult('error', message);
+                    return;
+                }
+                if (popup) {
+                    popup.location = url;
+                } else {
+                    window.location = url;
+                }
+            }).fail(function (xhr) {
+                if (popup) {
+                    popup.close();
+                }
+                var message = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message
+                    ? xhr.responseJSON.data.message
+                    : 'Kiyoh-Connect could not start.';
+                KiyohAdmin.showConnectResult('error', message);
+            }).always(function () {
+                $('#kiyoh-connect-start').prop('disabled', false);
+            });
+        },
+
+        handleConnectDisconnect: function (e) {
+            e.preventDefault();
+            if (!window.kiyoh_admin_ajax || !window.kiyohAdminData) {
+                return;
+            }
+            $('#kiyoh-connect-disconnect').prop('disabled', true);
+            $.post(kiyoh_admin_ajax.ajax_url, {
+                action: 'kiyoh_connect_disconnect',
+                nonce: kiyohAdminData.connectDisconnectNonce
+            }).done(function (response) {
+                if (response && response.success) {
+                    window.location = window.kiyohAdminData.settingsUrl;
+                    return;
+                }
+                var message = response && response.data && response.data.message ? response.data.message : 'Kiyoh-Connect could not disconnect.';
+                KiyohAdmin.showConnectResult('error', message);
+            }).fail(function (xhr) {
+                var message = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message
+                    ? xhr.responseJSON.data.message
+                    : 'Kiyoh-Connect could not disconnect.';
+                KiyohAdmin.showConnectResult('error', message);
+            }).always(function () {
+                $('#kiyoh-connect-disconnect').prop('disabled', false);
+            });
         },
 
         initTabs: function () {

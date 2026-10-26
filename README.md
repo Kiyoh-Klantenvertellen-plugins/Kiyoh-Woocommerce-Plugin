@@ -79,14 +79,14 @@ Once installed, you'll see a new "Kiyoh" option in your WordPress admin under **
 2. Go to **WooCommerce > Kiyoh**
 3. Configure your settings as described below
 
-#### Enter Your API Credentials
+#### Connect the shop, or paste a key
 
 In the **General Settings** section:
 - **Enable Plugin**: Set to **Yes**
-- **Platform**: Select your platform (Kiyoh.com or Klantenvertellen.nl)
-- **Location ID**: Enter your Location ID
-- **API Key**: Enter your API Key
-- Click **Save Changes**
+- **Platform**: Select Kiyoh.com or Klantenvertellen.nl
+- **Connect with Kiyoh / Klantenvertellen**: signs the merchant in on Kiyoh-Connect and fills the Location ID and API key. The shop must be HTTPS with pretty permalinks. No extra secrets in `wp-config.php`. Connect gives this shop its own secret on the first successful sign-in and the plugin stores that secret encrypted.
+- **Existing installs** can skip Connect and keep typing the Location ID and API key. Saving a change to either field keeps that manual key.
+- Click **Save Changes** after a manual key. Connect saves the key itself.
 
 #### Test Your Connection
 
@@ -243,7 +243,7 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.2.1  
+**Version**: 1.4.0  
 **Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary
@@ -257,6 +257,16 @@ For technical support:
 3. Contact your review platform support team
 4. Consult plugin documentation
 
+## Kiyoh Mobile health
+
+The plugin tells Kiyoh Mobile whether this shop is connected, when invites and product sync last succeeded, and whether Kiyoh ministars are shown. That report is sent when you save settings, test the connection, send or fail an invite, or sync products, and again once a day.
+
+On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to use `https://kiyoh-mobile.com`. To include staging as well, enter:
+
+`https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app`
+
+The same list can be set with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter. A non-blank setting overrides the constant. The filter overrides both. The report uses the saved API key and Location ID. Each URL gets one short request at the end of the page load. If Kiyoh Mobile does not answer, invitations and checkout still finish.
+
 ## Advanced Configuration
 
 ### Multisite Support
@@ -267,12 +277,32 @@ The plugin is compatible with WordPress multisite installations. Configure each 
 
 The plugin works with multilingual plugins and will attempt to detect customer language for invitations.
 
+## Permissions
+
+The settings screen, Connect button, disconnect, connection test, product sync, and rating sync all require `manage_woocommerce` (the same capability as managing the shop). Visitors and authors cannot start a sign-in or read the invite key from the admin UI.
+
+Connect asks Kiyoh-Connect for the scope `integration:connect` only. That scope returns the location id and the invite key for the location the merchant picks.
+
+## Data stored
+
+- **Settings** (`kiyoh_woocommerce_settings`): platform, Location ID, API key, whether the key came from Connect or was pasted, mobile URLs, invitation rules, product sync rules, and the rating source.
+- **Connect account** (`kiyoh_connect_account`): which Connect host was used, the return address, the location name, and the shop id, shop secret, and refresh token encrypted with the WordPress auth salt. There is no shared HMAC key or client secret.
+- **Health** (`kiyoh_mobile_health`): the last report fingerprint and any 429 wait.
+- **Tables**: product sync rows, invitation rows, and a review cache.
+- **Transients**: short-lived Connect sign-in state (15 minutes) and other `kiyoh_` caches.
+
+## Uninstall and deactivate
+
+- **Deactivate** stops scheduled jobs and clears the review cache. Settings, the Connect token, invitation rows, and product-sync rows stay, so activating again keeps the shop connected.
+- **Delete** runs `uninstall.php`. It tells Kiyoh-Connect to revoke this shop's token and shop registration (using the stored shop secret), then deletes the options, tables, cron events, and `kiyoh_` transients. On a multisite network this runs for each site.
+
 ## Security
 
-- API keys are stored securely in WordPress options
-- All user inputs are sanitized and validated
-- AJAX requests include nonce verification
-- User capability checks prevent unauthorized access
+- Kiyoh-Connect is a public client. The per-shop secret is issued at registration, returned once, and stored encrypted. It is not in the plugin zip, the browser, the sign-in link, or `wp-config.php`.
+- Connect tokens are encrypted at rest. The sign-in return is checked with a one-time `state` value, and start/disconnect use a nonce plus `manage_woocommerce`.
+- API keys are stored in WordPress options. Manual keys are not written into JavaScript.
+- AJAX requests include nonce verification.
+- User capability checks prevent unauthorized access.
 
 ---
 

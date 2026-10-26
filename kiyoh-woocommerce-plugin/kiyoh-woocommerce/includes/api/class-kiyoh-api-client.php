@@ -6,6 +6,7 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     private $api_token;
     private $location_id;
     private $platform;
+    private $connect_refreshed = false;
     
     public function __construct($platform, $api_token, $location_id) {
         $this->platform = $platform;
@@ -243,6 +244,13 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
+
+        if ((int) $response_code === 401 && !$this->connect_refreshed) {
+            $this->connect_refreshed = true;
+            if ($this->try_refresh_connect_credentials()) {
+                return $this->make_request($method, $endpoint, $data);
+            }
+        }
         
         if ($response_code >= 200 && $response_code < 300) {
             $decoded_body = json_decode($response_body, true);
@@ -308,6 +316,28 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         return 5;
     }
     
+    /**
+     * One Connect refresh after a publication 401. Does nothing for manual keys.
+     *
+     * @return bool
+     */
+    private function try_refresh_connect_credentials() {
+        if (!class_exists('Kiyoh_Connect_Session')) {
+            return false;
+        }
+        try {
+            $fresh = Kiyoh_Connect_Session::refresh_publication_credentials();
+        } catch (Throwable $e) {
+            return false;
+        }
+        if (!is_array($fresh) || empty($fresh['api_key']) || empty($fresh['location_id'])) {
+            return false;
+        }
+        $this->api_token = (string) $fresh['api_key'];
+        $this->location_id = (string) $fresh['location_id'];
+        return true;
+    }
+
     private function log_error($message, $context = array()) {
         if (defined('WP_DEBUG') && WP_DEBUG) {
             error_log('Kiyoh API Error: ' . $message . (empty($context) ? '' : ' - ' . json_encode($context)));

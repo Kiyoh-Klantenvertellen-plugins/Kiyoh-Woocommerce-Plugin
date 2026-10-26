@@ -1,0 +1,8 @@
+{
+  "client_id": "kiyoh-woocommerce",
+  "shop_origin": "https://shop.example",
+  "redirect_uri": "https://shop.example/wp-json/kiyoh/v1/oauth/callback",
+  "shop_id": "shop_pending1",
+  "shop_secret": "pending-secret-value-0002",
+  "status": "pending"
+}

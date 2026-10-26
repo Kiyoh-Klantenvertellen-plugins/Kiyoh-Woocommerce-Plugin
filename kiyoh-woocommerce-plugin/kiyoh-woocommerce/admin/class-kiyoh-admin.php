@@ -30,7 +30,7 @@ class Kiyoh_Admin {
             return true;
         }
 
-        return isset($_GET['page']) && $_GET['page'] === 'kiyoh-settings';
+        return isset($_GET['page']) && $_GET['page'] === 'kiyoh-settings'; // preflight: ignore — compared to a fixed page slug, not printed
     }
 
     public function enqueue_styles($hook) {
@@ -199,6 +199,19 @@ class Kiyoh_Admin {
                 'name' => 'kiyoh_woocommerce_settings[general][api_key]',
                 'value' => $this->get_option('general', 'api_key', ''),
                 'description' => __('Your API key from your Kiyoh/Klantenvertellen account', 'kiyoh-woocommerce')
+            )
+        );
+
+        add_settings_field(
+            'mobile_urls',
+            __('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'),
+            array($this, 'text_field_callback'),
+            'kiyoh-settings',
+            'kiyoh_general_section',
+            array(
+                'name' => 'kiyoh_woocommerce_settings[general][mobile_urls]',
+                'value' => $this->get_option('general', 'mobile_urls', ''),
+                'description' => __('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to use the default https://kiyoh-mobile.com. Example with staging: https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app', 'kiyoh-woocommerce')
             )
         );
     }
@@ -514,11 +527,51 @@ class Kiyoh_Admin {
         $sanitized = array();
 
         if (isset($input['general'])) {
+            $existing_settings = get_option('kiyoh_woocommerce_settings', array());
+            $previous_urls = '';
+            if (is_array($existing_settings) && isset($existing_settings['general']['mobile_urls'])) {
+                $previous_urls = $existing_settings['general']['mobile_urls'];
+            }
+            $mobile_urls = $previous_urls;
+            if (is_array($input['general']) && array_key_exists('mobile_urls', $input['general'])) {
+                $mobile_urls = sanitize_text_field($input['general']['mobile_urls']);
+            }
+
+            $new_location = sanitize_text_field($input['general']['location_id'] ?? '');
+            $new_key = sanitize_text_field($input['general']['api_key'] ?? '');
+            $old_location = '';
+            $old_key = '';
+            $old_source = 'manual';
+            if (is_array($existing_settings) && isset($existing_settings['general']) && is_array($existing_settings['general'])) {
+                $old_location = (string) ($existing_settings['general']['location_id'] ?? '');
+                $old_key = (string) ($existing_settings['general']['api_key'] ?? '');
+                $old_source = (($existing_settings['general']['credential_source'] ?? '') === 'connect') ? 'connect' : 'manual';
+            }
+            $apply_mode = class_exists('Kiyoh_Connect_Session') ? Kiyoh_Connect_Session::apply_mode() : '';
+            if ($apply_mode === 'connect') {
+                $source = 'connect';
+            } elseif ($apply_mode === 'disconnect') {
+                $source = 'manual';
+            } elseif ($new_location !== $old_location || $new_key !== $old_key) {
+                $source = 'manual';
+                if ($old_source === 'connect' && class_exists('Kiyoh_Connect_Session')) {
+                    Kiyoh_Connect_Session::on_manual_override();
+                }
+            } else {
+                $source = $old_source;
+            }
+            $platform = sanitize_text_field($input['general']['platform'] ?? '');
+            if (!in_array($platform, array('kiyoh', 'klantenvertellen'), true)) {
+                $platform = 'kiyoh';
+            }
+
             $sanitized['general'] = array(
                 'enabled' => !empty($input['general']['enabled']),
-                'platform' => sanitize_text_field($input['general']['platform'] ?? ''),
-                'location_id' => sanitize_text_field($input['general']['location_id'] ?? ''),
-                'api_key' => sanitize_text_field($input['general']['api_key'] ?? '')
+                'platform' => $platform,
+                'location_id' => $new_location,
+                'api_key' => $new_key,
+                'mobile_urls' => $mobile_urls,
+                'credential_source' => $source,
             );
         }
 
@@ -618,7 +671,7 @@ class Kiyoh_Admin {
      */
     public function ajax_bulk_sync() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -664,7 +717,7 @@ class Kiyoh_Admin {
      */
     public function ajax_bulk_sync_products() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -683,7 +736,7 @@ class Kiyoh_Admin {
      */
     public function ajax_test_api_connection() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -705,7 +758,7 @@ class Kiyoh_Admin {
      * AJAX handler: queue a background rating sync and run the first chunk.
      */
     public function ajax_sync_product_ratings() {
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -736,7 +789,7 @@ class Kiyoh_Admin {
      * is currently holding the lock (covers DISABLE_WP_CRON).
      */
     public function ajax_rating_sync_status() {
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -913,34 +966,59 @@ class Kiyoh_Admin {
     public static function test_api_connection() {
         try {
             if (!Kiyoh_Api_Factory::is_configured()) {
-                return array(
+                $result = array(
                     'success' => false,
                     'message' => 'API not configured. Please set API token and location ID.'
                 );
-            }
-
-            $client = Kiyoh_Api_Factory::create_client();
-            $response = $client->get_company_stats();
-
-            if ($response->is_success()) {
-                $data = $response->get_data();
-                return array(
-                    'success' => true,
-                    'message' => 'API connection successful',
-                    'stats' => $data
-                );
             } else {
-                return array(
-                    'success' => false,
-                    'message' => 'API connection failed: ' . $response->get_error(),
-                    'error_code' => $response->get_error_code()
-                );
+                $client = Kiyoh_Api_Factory::create_client();
+                $response = $client->get_company_stats();
+
+                if ($response->is_success()) {
+                    $data = $response->get_data();
+                    $result = array(
+                        'success' => true,
+                        'message' => 'API connection successful',
+                        'stats' => $data,
+                        'http_status' => $response->get_response_code(),
+                    );
+                } else {
+                    $result = array(
+                        'success' => false,
+                        'message' => 'API connection failed: ' . $response->get_error(),
+                        'error_code' => $response->get_error_code(),
+                        'http_status' => $response->get_response_code(),
+                    );
+                }
             }
         } catch (Exception $e) {
-            return array(
+            $result = array(
                 'success' => false,
                 'message' => 'Test failed: ' . $e->getMessage()
             );
+        }
+
+        self::report_connection_health($result);
+        return $result;
+    }
+
+    /**
+     * A failed health report must not turn a connection test into an error.
+     *
+     * @param array $result
+     */
+    private static function report_connection_health($result) {
+        try {
+            if (!class_exists('Kiyoh_Mobile_Health_Reporter')) {
+                return;
+            }
+            Kiyoh_Mobile_Health_Reporter::instance()->note_connection_test(
+                !empty($result['success']),
+                isset($result['message']) ? $result['message'] : null,
+                isset($result['http_status']) ? $result['http_status'] : null
+            );
+        } catch (Throwable $e) {
+            error_log('Kiyoh Mobile Health: connection note failed: ' . $e->getMessage());
         }
     }
 

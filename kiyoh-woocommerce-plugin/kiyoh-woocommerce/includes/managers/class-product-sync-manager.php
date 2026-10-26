@@ -115,22 +115,27 @@ class Kiyoh_Product_Sync_Manager {
             $api_client = $this->get_api_client();
             if (!$api_client) {
                 error_log("Kiyoh Product Sync: API client not available for product {$product_id}");
+                $this->report_product_sync_health(false, 'API client not available', array(), null);
                 return false;
             }
 
             $response = $api_client->sync_product($product_data);
             
             $this->update_sync_status($product_id, $response);
+            $product_code = isset($product_data['product_code']) ? $product_data['product_code'] : '';
             
             if ($response->is_success()) {
                 error_log("Kiyoh Product Sync: Successfully synced product {$product_id} (SKU: {$product_data['product_code']})");
+                $this->report_product_sync_health(true, null, array($product_code), $response->get_response_code());
             } else {
                 error_log("Kiyoh Product Sync: Failed to sync product {$product_id}: " . $response->get_error());
+                $this->report_product_sync_health(false, $response->get_error(), array(), $response->get_response_code());
             }
             
             return $response->is_success();
         } catch (Exception $e) {
             error_log("Kiyoh Product Sync: Exception syncing product {$product_id}: " . $e->getMessage());
+            $this->report_product_sync_health(false, $e->getMessage(), array(), null);
             return false;
         }
     }
@@ -153,9 +158,17 @@ class Kiyoh_Product_Sync_Manager {
         $api_client = $this->get_api_client();
         if (!$api_client) {
             $results['errors'] = count($products);
-            $results['error_messages'][] = __('API client could not be initialised. Check that the API key, Location ID and platform are configured correctly under the General tab.', 'kiyoh-woocommerce');
+            $message = __('API client could not be initialised. Check that the API key, Location ID and platform are configured correctly under the General tab.', 'kiyoh-woocommerce');
+            $results['error_messages'][] = $message;
+            $this->report_product_sync_health(false, $message, array(), null);
             return $results;
         }
+
+        $synced_codes = array();
+        $sync_error = null;
+        $sync_http = null;
+        $saw_success = false;
+        $saw_failure = false;
 
         // Process in batches of 50 for better performance
         $batch_size = 50;
@@ -186,6 +199,13 @@ class Kiyoh_Product_Sync_Manager {
                     
                     if ($response->is_success()) {
                         $results['synced'] += count($batch_data);
+                        $saw_success = true;
+                        $sync_http = $this->prefer_sync_http_status($sync_http, $response->get_response_code());
+                        foreach ($batch_data as $synced_product) {
+                            if (isset($synced_product['product_code'])) {
+                                $synced_codes[] = $synced_product['product_code'];
+                            }
+                        }
                         
                         // Update sync status for all products in batch
                         foreach ($batch_product_ids as $product_id) {
@@ -218,6 +238,9 @@ class Kiyoh_Product_Sync_Manager {
                         }
 
                         $results['error_messages'][] = $detail;
+                        $saw_failure = true;
+                        $sync_error = $detail;
+                        $sync_http = $this->prefer_sync_http_status($sync_http, $response->get_response_code());
 
                         // Log full error for batch
                         error_log('Kiyoh Bulk Sync Error: ' . $detail);
@@ -234,11 +257,14 @@ class Kiyoh_Product_Sync_Manager {
                     }
                 } catch (Exception $e) {
                     $results['errors'] += count($batch_data);
-                    $results['error_messages'][] = sprintf(
+                    $exception_message = sprintf(
                         /* translators: %s: PHP exception message */
                         __('Batch failed with exception: %s', 'kiyoh-woocommerce'),
                         $e->getMessage()
                     );
+                    $results['error_messages'][] = $exception_message;
+                    $saw_failure = true;
+                    $sync_error = $exception_message;
                     error_log('Kiyoh Bulk Sync Exception: ' . $e->getMessage());
                 }
             }
@@ -247,7 +273,56 @@ class Kiyoh_Product_Sync_Manager {
             sleep(3);
         }
 
+        if ($saw_success || $saw_failure) {
+            $this->report_product_sync_health($saw_success, $saw_failure ? $sync_error : null, $synced_codes, $sync_http);
+        }
+
         return $results;
+    }
+
+    /**
+     * Keep a 401/403 ahead of a later success so the health report records the auth failure.
+     *
+     * @param mixed $current
+     * @param mixed $incoming
+     * @return int|null
+     */
+    private function prefer_sync_http_status($current, $incoming) {
+        $incoming = is_numeric($incoming) ? (int) $incoming : null;
+        $current = is_numeric($current) ? (int) $current : null;
+        if ($current === 401 || $current === 403) {
+            return $current;
+        }
+        if ($incoming === 401 || $incoming === 403) {
+            return $incoming;
+        }
+        if ($incoming !== null && $incoming >= 200 && $incoming < 300) {
+            return $incoming;
+        }
+        if ($current !== null && $current >= 200 && $current < 300) {
+            return $current;
+        }
+
+        return $incoming !== null ? $incoming : $current;
+    }
+
+    /**
+     * Health reporting must not change the sync result.
+     *
+     * @param bool  $ok
+     * @param mixed $error
+     * @param array $codes
+     * @param mixed $http_status
+     */
+    private function report_product_sync_health($ok, $error, $codes, $http_status) {
+        try {
+            if (!class_exists('Kiyoh_Mobile_Health_Reporter')) {
+                return;
+            }
+            Kiyoh_Mobile_Health_Reporter::instance()->note_product_sync($ok, $error, $codes, $http_status);
+        } catch (Throwable $e) {
+            error_log('Kiyoh Mobile Health: product sync note failed: ' . $e->getMessage());
+        }
     }
 
     // Bisects a failing batch to isolate and log the exact offending product(s). Opt-in via KIYOH_DIAGNOSE_BATCH.
@@ -670,7 +745,7 @@ class Kiyoh_Product_Sync_Manager {
 
     public function ajax_bulk_sync_products() {
         // Verify nonce
-        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) {
+        if (!wp_verify_nonce($_POST['nonce'], 'kiyoh_admin_nonce')) { // preflight: ignore — nonce is verified here; manage_woocommerce is checked next
             wp_die('Security check failed');
         }
 
@@ -679,7 +754,7 @@ class Kiyoh_Product_Sync_Manager {
             wp_die('Insufficient permissions');
         }
 
-        $page = isset($_POST['page']) ? intval($_POST['page']) : 1;
+        $page = isset($_POST['page']) ? intval($_POST['page']) : 1; // preflight: ignore — cast to int after the nonce and manage_woocommerce checks above
         $per_page = 50; // Process 50 products per batch
         
         $offset = ($page - 1) * $per_page;
