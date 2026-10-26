@@ -243,7 +243,7 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.4.0  
+**Version**: 1.4.1  
 **Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary
@@ -259,11 +259,11 @@ For technical support:
 
 ## Kiyoh Mobile health
 
-The plugin tells Kiyoh Mobile whether this shop is connected, when invites and product sync last succeeded, and whether Kiyoh ministars are shown. That report is sent when you save settings, test the connection, send or fail an invite, or sync products, and again once a day.
+The plugin tells Kiyoh Mobile whether this shop is connected, when invites and product sync last succeeded, and whether Kiyoh ministars are shown. That report is sent when Connect saves the location and invite key, when you save settings, test the connection, send or fail an invite, or sync products, and again once a day.
 
-On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to use `https://kiyoh-mobile.com`. To include staging as well, enter:
+On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to report only to production:
 
-`https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app`
+`https://kiyoh-mobile.com` (testers enter `https://kiyohmobileui-staging.up.railway.app`)
 
 The same list can be set with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter. A non-blank setting overrides the constant. The filter overrides both. The report uses the saved API key and Location ID. Each URL gets one short request at the end of the page load. If Kiyoh Mobile does not answer, invitations and checkout still finish.
 

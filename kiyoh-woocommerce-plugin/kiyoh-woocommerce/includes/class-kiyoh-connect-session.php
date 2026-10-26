@@ -562,6 +562,9 @@ class Kiyoh_Connect_Session {
                 $settings['general']['enabled'] = true;
             }
             update_option('kiyoh_woocommerce_settings', $settings);
+            if (class_exists('Kiyoh_Mobile_Health_Reporter')) {
+                Kiyoh_Mobile_Health_Reporter::instance()->note_connect_saved();
+            }
         } finally {
             self::$apply_mode = '';
         }

@@ -79,6 +79,24 @@ class Kiyoh_Mobile_Health_Reporter {
     }
 
     /**
+     * Kiyoh-Connect stored a location id and invite key.
+     *
+     * update_option does not fire when those values are unchanged, so Connect
+     * calls this after every successful credentials save. The connection is ok:
+     * Connect returned the invite key for the location the merchant picked.
+     */
+    public function note_connect_saved() {
+        $this->guard(function () {
+            $now = time();
+            $state = $this->load_state();
+            $state = Kiyoh_Mobile_Health::apply_connection_result($state, true, null, 200, $now);
+            $state = $this->with_current_widget($state, true);
+            $this->save_state($state);
+            $this->request_publish();
+        });
+    }
+
+    /**
      * Connection test from the settings screen.
      *
      * @param bool  $ok
