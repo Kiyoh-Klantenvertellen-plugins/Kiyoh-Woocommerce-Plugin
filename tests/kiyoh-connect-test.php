@@ -197,6 +197,33 @@ expect_true(strpos($html, 'evil.example') === false, 'callback HTML drops a next
 expect_true(strpos($html, 'kiyoh-connect') !== false, 'callback HTML posts a kiyoh-connect message');
 expect_same('', Kiyoh_Connect::safe_next_url('http://shop.example/wp-admin/', $origin), 'the popup does not continue to an http admin URL');
 
+$settings = 'https://shop.example/wp-admin/admin.php?page=kiyoh-settings&tab=general&kiyoh_connect=connected';
+$connected = Kiyoh_Connect::callback_document(true, 'Connected with Kiyoh-Connect.', $origin, $settings);
+expect_true(strpos($connected, 'opener.postMessage(payload,origin)') !== false, 'the popup posts only to the opener origin variable');
+expect_true(strpos($connected, 'postMessage(payload,"*")') === false && strpos($connected, "postMessage(payload,'*')") === false, 'the popup never posts to *');
+expect_true(strpos($connected, '"https:\\/\\/shop.example"') !== false || strpos($connected, '"https://shop.example"') !== false, 'the postMessage origin is the shop https origin');
+$close_ack = strpos($connected, 'data.source!=="kiyoh-connect-ack"');
+$close_call = strpos($connected, 'window.close()');
+expect_true($close_ack !== false && $close_call !== false && $close_ack < $close_call, 'window.close runs only after the opener ack');
+expect_true(strpos($connected, 'if(!opener||!origin){fallback();return;}') !== false, 'a missing opener uses the same-window fallback');
+expect_true(strpos($connected, 'if(next){window.location.replace(next);}') !== false, 'the fallback navigates this window to the settings URL');
+expect_true(strpos($connected, 'window.opener.postMessage') === false, 'the popup does not keep the old always-redirect script');
+expect_true(strpos($connected, 'window.setTimeout(fallback,500)') !== false, 'a lost opener falls back after a short wait');
+expect_true(strpos($connected, 'href="' . htmlspecialchars($settings, ENT_QUOTES, 'UTF-8') . '"') !== false, 'the same-origin settings URL is the manual fallback link');
+$quoted = 'https://shop.example/wp-admin/admin.php?q="><img';
+$quoted_html = Kiyoh_Connect::callback_document(true, 'ok', $origin, $quoted);
+expect_true(strpos($quoted_html, 'q="><img') === false, 'the fallback link escapes a quote in the settings URL');
+
+$admin_js = file_get_contents(dirname(__DIR__) . '/kiyoh-woocommerce-plugin/kiyoh-woocommerce/admin/js/kiyoh-admin.js');
+expect_true(strpos($admin_js, 'event.origin !== window.kiyohAdminData.callbackOrigin') !== false, 'the settings tab rejects a message from another origin');
+expect_true(strpos($admin_js, 'event.source !== KiyohAdmin.connectPopup') !== false, 'the settings tab ignores a message from another frame');
+expect_true(strpos($admin_js, "event.source.postMessage({ source: 'kiyoh-connect-ack' }, event.origin)") !== false, 'the ack is sent to the callback origin only');
+expect_true(strpos($admin_js, 'connectPopup.close()') !== false, 'the settings tab closes the popup');
+expect_true(strpos($admin_js, 'kiyoh_connect=connected') !== false, 'the settings tab reloads as Connected');
+expect_true(strpos($admin_js, ", '*'") === false && strpos($admin_js, ', "*"') === false, 'admin script does not postMessage to *');
+$session_php = file_get_contents(dirname(__DIR__) . '/kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/class-kiyoh-connect-session.php');
+expect_true(strpos($session_php, "header('Cross-Origin-Opener-Policy: unsafe-none');") !== false, 'the callback response does not sever window.opener');
+
 $plugin_root = dirname(__DIR__) . '/kiyoh-woocommerce-plugin/kiyoh-woocommerce';
 $iterator = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($plugin_root));
 $shipped_secret = false;

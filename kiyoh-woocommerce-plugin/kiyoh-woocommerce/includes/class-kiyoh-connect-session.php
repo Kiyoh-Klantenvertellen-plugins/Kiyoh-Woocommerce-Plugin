@@ -86,6 +86,9 @@ class Kiyoh_Connect_Session {
         header('Referrer-Policy: no-referrer');
         header('Cache-Control: no-store');
         header('X-Content-Type-Options: nosniff');
+        // Keep the settings tab as window.opener. A same-origin COOP on this
+        // response would drop it after the cross-origin Connect hop.
+        header('Cross-Origin-Opener-Policy: unsafe-none');
         echo $result->get_data();
         return true;
     }

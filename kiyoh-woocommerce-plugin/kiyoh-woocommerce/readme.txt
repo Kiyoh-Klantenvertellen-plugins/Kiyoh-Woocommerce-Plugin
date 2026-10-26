@@ -4,7 +4,7 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.4.1
+Stable tag: 1.4.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
@@ -36,6 +36,9 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 * Deactivate keeps that data and stops scheduled jobs. Delete removes options, tables, cron, and transients, and revokes the shop at Kiyoh-Connect.
 
 == Changelog ==
+
+= 1.4.2 =
+* Connect with Kiyoh closes the sign-in popup and refreshes the original WooCommerce → Kiyoh tab to Connected. If that tab is no longer the opener, the same window opens the settings page.
 
 = 1.4.1 =
 * A blank Kiyoh Mobile URL(s) field reports only to https://kiyoh-mobile.com. Live shops never report to staging; testers enter https://kiyohmobileui-staging.up.railway.app in the field.

@@ -623,6 +623,14 @@ class Kiyoh_Connect {
     }
 
     /**
+     * Result page for the OAuth popup.
+     *
+     * When window.opener is still the WooCommerce settings tab, the page
+     * postMessages that exact https origin (never '*') and closes. The opener
+     * reloads itself. If the opener is missing, closed, or blocked (popup
+     * blocker sent the shop itself through Connect, or COOP dropped the link),
+     * this same window continues to the settings URL.
+     *
      * @param mixed $ok
      * @param mixed $message
      * @param mixed $target_origin Opener origin that may receive the result.
@@ -652,16 +660,28 @@ class Kiyoh_Connect {
         $heading = $ok ? 'Kiyoh is connected' : 'Kiyoh could not connect';
         $safe_heading = htmlspecialchars($heading, ENT_QUOTES, 'UTF-8');
         $safe_message = htmlspecialchars($message, ENT_QUOTES, 'UTF-8');
+        $fallback_link = '';
+        if ($next !== '') {
+            $fallback_link = '<p><a href="' . htmlspecialchars($next, ENT_QUOTES, 'UTF-8') . '">Return to WooCommerce</a></p>';
+        }
         return '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><title>'
             . $safe_heading
             . '</title></head><body><p>'
             . $safe_heading
             . '</p><p>'
             . $safe_message
-            . '</p><script>'
+            . '</p>'
+            . $fallback_link
+            . '<script>'
             . '(function(){var payload=' . $payload . ';var origin=' . $origin_js . ';var next=' . $next_js . ';'
-            . 'if(window.opener&&origin){try{window.opener.postMessage(payload,origin);}catch(e){}}'
-            . 'if(next){window.location.replace(next);}'
+            . 'var done=false;function fallback(){if(done){return;}done=true;if(next){window.location.replace(next);}}'
+            . 'var opener=null;try{opener=window.opener&&!window.opener.closed?window.opener:null;}catch(e){opener=null;}'
+            . 'if(!opener||!origin){fallback();return;}'
+            . 'window.addEventListener("message",function(event){var data=event.data||{};'
+            . 'if(event.origin!==origin||event.source!==opener||!data||data.source!=="kiyoh-connect-ack"){return;}'
+            . 'done=true;window.close();});'
+            . 'try{opener.postMessage(payload,origin);}catch(e){fallback();return;}'
+            . 'window.setTimeout(fallback,500);'
             . '})();'
             . '</script></body></html>';
     }
