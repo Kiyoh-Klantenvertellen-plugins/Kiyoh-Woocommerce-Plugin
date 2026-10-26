@@ -10,7 +10,8 @@ class Kiyoh_Mobile_Health {
 
     const PLATFORM = 'woocommerce';
     const HEALTH_PATH = '/api/integrations/health';
-    const DEFAULT_URLS = 'https://kiyoh-mobile.com';
+    /** Production and staging. A blank setting uses this list, same as the other plugins. */
+    const DEFAULT_URLS = 'https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app';
     const HEADER_PUBLICATION = 'X-Publication-Api-Token';
     const HEADER_LOCATION = 'X-Location-Id';
     const CRON_HOOK = 'kiyoh_report_mobile_health';
@@ -98,7 +99,7 @@ class Kiyoh_Mobile_Health {
     }
 
     /**
-     * Setting wins when it is non-blank. Otherwise the constant, otherwise the production default.
+     * Setting wins when it is non-blank. Otherwise the constant, otherwise production and staging.
      *
      * @param mixed $setting_value
      * @param mixed $constant_value
@@ -634,7 +635,8 @@ class Kiyoh_Mobile_Health {
     }
 
     /**
-     * Groups the WooCommerce plugin can report. Webhooks are omitted.
+     * Groups the plugins page renders. This plugin does not receive webhooks, so
+     * lastReceivedAt stays null. The key is still sent: the card reads it on every row.
      *
      * @param array  $state
      * @param string $shop_id
@@ -666,6 +668,9 @@ class Kiyoh_Mobile_Health {
                 'failures24h' => self::failures_24h($state, $now),
             ),
             'productSync' => $product,
+            'webhooks' => array(
+                'lastReceivedAt' => null,
+            ),
             'widget' => array(
                 'injected' => (bool) $state['widget']['injected'],
                 'lastCheckedAt' => self::iso_timestamp($state['widget']['last_checked_at']),

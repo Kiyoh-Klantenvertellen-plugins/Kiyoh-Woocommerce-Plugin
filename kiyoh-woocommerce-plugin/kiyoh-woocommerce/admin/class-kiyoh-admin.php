@@ -211,7 +211,7 @@ class Kiyoh_Admin {
             array(
                 'name' => 'kiyoh_woocommerce_settings[general][mobile_urls]',
                 'value' => $this->get_option('general', 'mobile_urls', ''),
-                'description' => __('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to use the default https://kiyoh-mobile.com. Example with staging: https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app', 'kiyoh-woocommerce')
+                'description' => __('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to report to https://kiyoh-mobile.com and https://kiyohmobileui-staging.up.railway.app.', 'kiyoh-woocommerce')
             )
         );
     }

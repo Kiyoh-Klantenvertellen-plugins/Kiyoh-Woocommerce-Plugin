@@ -1,7 +1,7 @@
 # PLUGIN_SPEC — Kiyoh WooCommerce
 
 **Shape:** A + B (WordPress/WooCommerce plugin and Kiyoh / Kiyoh-Connect / Kiyoh Mobile connector)
-**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.0
+**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.0-rc2
 
 ## Host
 - Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.2.1). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.
@@ -27,13 +27,13 @@
   - Refresh form: `grant_type=refresh_token`, `refresh_token`, `client_id`, `shop_id`, `shop_secret`. A new refresh token replaces the stored one.
   - `POST {issuer}/revoke` form: `token`, `client_id`, `shop_id`, `shop_secret`.
   - `POST {issuer}/shops/revoke` JSON: `client_id`, `shop_id`, `shop_secret`. Disconnect and uninstall both send this after the token revoke. If the shop secret cannot be decrypted, the remote revoke is skipped and local data is still deleted.
-- Kiyoh Mobile health: `KIYOH_MOBILE_URLS` (default `https://kiyoh-mobile.com`), overridden by the setting, overridden by the `kiyoh_mobile_urls` filter. `POST /api/integrations/health`.
+- Kiyoh Mobile health: `KIYOH_MOBILE_URLS` (default `https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app`), overridden by the setting, overridden by the `kiyoh_mobile_urls` filter. `POST /api/integrations/health`. Body includes `webhooks.lastReceivedAt` (null; this plugin has no webhook receiver).
 - Auth: Connect is OAuth 2.1 authorization code + PKCE with a per-shop secret. The publication API uses the invite key from Connect, or a manually pasted key.
 - Rate limits: Connect and Mobile 429 honour `Retry-After`, else `retryAfterSeconds`. Interactive Connect calls stop after 3 attempts or when the wait is over 8 seconds. Backoff cap is 60 seconds. A register 429 tells the merchant to wait. Publication calls are not given a 5-attempt hang inside checkout.
 - Webhooks: none. This plugin does not receive webhooks.
 
 ## Behaviour
-- Trigger: merchant clicks Connect (popup). Registration runs only when this issuer and return address have no reusable shop secret. Daily health cron, plus health on settings save, invite, and product sync. Invites on order status.
+- Trigger: merchant clicks Connect (popup). Registration runs only when this issuer and return address have no reusable shop secret. Daily health cron, plus health on Connect credential save, settings save, invite, and product sync. Invites on order status.
 - Failure policy: Connect errors stay on the settings screen. An active secret is saved before the popup, because Connect shows it once. A pending secret is saved only after the token call succeeds. A publication 401 refreshes Connect once when the shop is connected, then retries that call once. Manual keys are not overwritten by a refresh. Health failures never stop checkout or invites.
 - Idempotency: the same return address reuses `shop_id` and `shop_secret` and does not call register. The OAuth `state` transient is single-use and lasts 15 minutes. Location id and invite key are written only after both the token and the credentials call succeed. A second callback with the same state does not write again. Switching the platform (Kiyoh vs Klantenvertellen) does not reuse the other issuer's secret.
 
@@ -53,7 +53,7 @@
 
 ## Config precedence
 - Connect has no wp-config secret. `shop_url` is the https origin of the shop. The issuer is chosen only by the platform setting. It is not a free-text URL.
-- Mobile URLs: `kiyoh_mobile_urls` filter, else a non-blank setting, else `KIYOH_MOBILE_URLS`, else `https://kiyoh-mobile.com`.
+- Mobile URLs: `kiyoh_mobile_urls` filter, else a non-blank setting, else `KIYOH_MOBILE_URLS`, else `https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app`.
 
 ## Security checklist
 - Secrets: no shared HMAC key and no client secret in the zip, JavaScript, logs, or authorize URL. The per-shop secret and the refresh and access tokens are encrypted. Editing the Location ID or API key clears the refresh and access tokens and stops automatic overwrite; the shop secret stays so the same return address can connect again.

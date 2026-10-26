@@ -243,7 +243,7 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.4.0  
+**Version**: 1.4.0-rc2  
 **Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary
@@ -259,9 +259,9 @@ For technical support:
 
 ## Kiyoh Mobile health
 
-The plugin tells Kiyoh Mobile whether this shop is connected, when invites and product sync last succeeded, and whether Kiyoh ministars are shown. That report is sent when you save settings, test the connection, send or fail an invite, or sync products, and again once a day.
+The plugin tells Kiyoh Mobile whether this shop is connected, when invites and product sync last succeeded, and whether Kiyoh ministars are shown. That report is sent when Connect saves the location and invite key, when you save settings, test the connection, send or fail an invite, or sync products, and again once a day.
 
-On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to use `https://kiyoh-mobile.com`. To include staging as well, enter:
+On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to report to both:
 
 `https://kiyoh-mobile.com, https://kiyohmobileui-staging.up.railway.app`
 

@@ -32,7 +32,16 @@ $now = 1761206400; // 2026-10-23 08:00:00 UTC
 $production = 'https://kiyoh-mobile.com';
 $staging = 'https://kiyohmobileui-staging.up.railway.app';
 
-expect_same(array($production), Kiyoh_Mobile_Health::resolve_base_urls('', ''), 'blank setting and constant use the production default');
+expect_same(
+    array($production, $staging),
+    Kiyoh_Mobile_Health::resolve_base_urls('', ''),
+    'blank setting and constant report to production and staging'
+);
+expect_same(
+    'https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app',
+    Kiyoh_Mobile_Health::DEFAULT_URLS,
+    'the default list is the same pair the other plugins use'
+);
 expect_same(array($production), Kiyoh_Mobile_Health::resolve_base_urls('  ', $production), 'blank setting keeps the constant');
 expect_same(
     array($production, $staging),
@@ -66,6 +75,7 @@ expect_same('', Kiyoh_Mobile_Health::shop_id_from_url('-bad.example'), 'shop id 
 expect_same(200, strlen(Kiyoh_Mobile_Health::shop_id_from_url(str_repeat('a', 250) . '.example.com')), 'shop id is capped at 200 characters');
 
 expect_same('1.3.0', Kiyoh_Mobile_Health::normalize_plugin_version(' 1.3.0 '), 'plugin version is trimmed');
+expect_same('1.4.0-rc2', Kiyoh_Mobile_Health::normalize_plugin_version('1.4.0-rc2'), 'a release candidate is a valid plugin version');
 expect_same('1.3.0-beta+1', Kiyoh_Mobile_Health::normalize_plugin_version('1.3.0-beta+1'), 'plugin version allows . _ + -');
 expect_same('', Kiyoh_Mobile_Health::normalize_plugin_version('.1'), 'plugin version must start with a letter or digit');
 
@@ -179,7 +189,11 @@ expect_same('1.3.0', $body['pluginVersion'], 'body carries the plugin version');
 expect_same(array('lastOkAt', 'failures24h'), array_keys($body['invites']), 'invites group is lastOkAt and failures24h');
 expect_true(isset($body['productSync']['productCodes']), 'product codes are included when present');
 expect_same(true, $body['widget']['injected'], 'widget injected is a boolean');
-expect_false(array_key_exists('webhooks', $body), 'webhooks are omitted because this plugin does not receive them');
+expect_same(
+    array('lastReceivedAt' => null),
+    $body['webhooks'],
+    'webhooks are sent with a null time so the plugins page can render the card'
+);
 expect_same(gmdate('Y-m-d\TH:i:s\Z', $now + 30), $body['productSync']['lastOkAt'], 'timestamps are UTC ISO-8601');
 expect_same('Z', substr($body['productSync']['lastOkAt'], -1), 'timestamps use the Z timezone');
 
