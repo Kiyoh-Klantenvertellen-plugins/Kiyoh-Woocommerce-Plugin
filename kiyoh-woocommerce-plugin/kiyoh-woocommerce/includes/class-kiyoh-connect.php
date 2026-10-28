@@ -90,6 +90,24 @@ class Kiyoh_Connect {
      * @param mixed $url
      * @return string
      */
+    /**
+     * HTTP shops cannot use Connect. Empty when the URL is not http.
+     *
+     * @param mixed $url
+     * @return string http|invalid|''
+     */
+    public static function connect_block_reason($url) {
+        $parts = is_string($url) ? parse_url($url) : false;
+        if (!is_array($parts)) {
+            return 'invalid';
+        }
+        $scheme = isset($parts['scheme']) ? strtolower((string) $parts['scheme']) : '';
+        if ($scheme === 'http') {
+            return 'http';
+        }
+        return '';
+    }
+
     public static function shop_origin($url) {
         $parts = is_string($url) ? parse_url($url) : false;
         if (!is_array($parts)) {

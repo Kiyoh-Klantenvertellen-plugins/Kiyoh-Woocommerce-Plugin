@@ -25,6 +25,9 @@ if (!is_array($connect_account)) {
     $connect_account = array();
 }
 $credential_source = (isset($settings['general']['credential_source']) && $settings['general']['credential_source'] === 'connect') ? 'connect' : 'manual';
+$saved_location_id = isset($settings['general']['location_id']) ? (string) $settings['general']['location_id'] : '';
+$saved_api_key = isset($settings['general']['api_key']) ? (string) $settings['general']['api_key'] : '';
+$credentials_ready = !empty($settings['general']['enabled']) && $saved_location_id !== '' && $saved_api_key !== '';
 $connect_status = isset($connect_account['status']) ? (string) $connect_account['status'] : '';
 $connect_flash = get_transient('kiyoh_connect_flash');
 if (is_array($connect_flash)) {
@@ -90,6 +93,11 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
             <div class="tab-panel tab-general" <?php echo $active_tab != 'general' ? 'style="display:none;"' : ''; ?>>
                 <h2><?php _e('General Settings', 'kiyoh-woocommerce'); ?></h2>
                 <p><?php _e('Configure your Kiyoh/Klantenvertellen account connection.', 'kiyoh-woocommerce'); ?></p>
+                <?php if (!$credentials_ready): ?>
+                    <div class="notice notice-warning">
+                        <p><?php esc_html_e('API credentials are not configured or the plugin is disabled.', 'kiyoh-woocommerce'); ?></p>
+                    </div>
+                <?php endif; ?>
                 
                 <table class="form-table">
                     <tr>
@@ -126,8 +134,11 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                                         <?php echo esc_html($connect_account['location_name']); ?>
                                     <?php endif; ?>
                                 </p>
+                            <?php elseif ($saved_location_id !== '' && $saved_api_key !== ''): ?>
+                                <p><strong><?php esc_html_e('Manual connection.', 'kiyoh-woocommerce'); ?></strong>
+                                    <?php esc_html_e('This shop uses the Location ID and API key saved on this page.', 'kiyoh-woocommerce'); ?></p>
                             <?php else: ?>
-                                <p><?php esc_html_e('Using a manually entered API key, or not connected yet.', 'kiyoh-woocommerce'); ?></p>
+                                <p><?php esc_html_e('Not connected yet. Connect with Kiyoh-Connect, or save a Location ID and API key for a manual connection.', 'kiyoh-woocommerce'); ?></p>
                             <?php endif; ?>
                             <button type="button" class="button button-primary" id="kiyoh-connect-start">
                                 <?php esc_html_e('Connect with Kiyoh / Klantenvertellen', 'kiyoh-woocommerce'); ?>
@@ -157,7 +168,8 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                             <label for="api_key"><?php _e('API Key', 'kiyoh-woocommerce'); ?></label>
                         </th>
                         <td>
-                            <input type="password" id="api_key" name="kiyoh_woocommerce_settings[general][api_key]" value="<?php echo esc_attr(isset($settings['general']['api_key']) ? $settings['general']['api_key'] : ''); ?>" class="regular-text" />
+                            <input type="password" id="api_key" name="kiyoh_woocommerce_settings[general][api_key]" value="<?php echo esc_attr($saved_api_key); ?>" class="regular-text" />
+                            <input type="hidden" id="credential_touch" name="kiyoh_woocommerce_settings[general][credential_touch]" value="" />
                             <p class="description"><?php esc_html_e('Filled by Connect, or paste a key from an existing install. Editing either field switches this shop back to the manual key.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
@@ -574,8 +586,10 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
 
 <script type="text/javascript">
 window.kiyohAdminData = <?php echo wp_json_encode(array(
-    'hasCredentials' => !empty($settings['general']['location_id']) && !empty($settings['general']['api_key']),
+    'hasCredentials' => $saved_location_id !== '' && $saved_api_key !== '',
     'activeTab' => $active_tab,
+    'requiresHttps' => class_exists('Kiyoh_Connect') && Kiyoh_Connect::connect_block_reason(home_url('/')) === 'http',
+    'httpsMessage' => class_exists('Kiyoh_Connect') ? Kiyoh_Connect::validation_message('http') : '',
     'connectStartNonce' => wp_create_nonce('kiyoh_connect_start'),
     'connectDisconnectNonce' => wp_create_nonce('kiyoh_connect_disconnect'),
     'callbackOrigin' => $callback_origin,

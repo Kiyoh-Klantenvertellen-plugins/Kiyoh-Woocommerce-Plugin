@@ -114,6 +114,19 @@ class Kiyoh_Rating_Manager {
             && !empty($this->settings['general']['location_id']);
     }
 
+    /**
+     * A failed rating sync can keep this text after the merchant saves credentials.
+     *
+     * @param mixed $error
+     * @return bool
+     */
+    public static function is_credentials_configuration_error($error) {
+        $error = (string) $error;
+        return strpos($error, 'API credentials are not configured') !== false
+            || strpos($error, 'API credentials not configured') !== false
+            || strpos($error, 'API not configured') !== false;
+    }
+
     public function is_import_enabled() {
         return in_array($this->get_rating_source(), array('kiyoh', 'both'), true);
     }
@@ -512,7 +525,17 @@ class Kiyoh_Rating_Manager {
         if ($status === 'completed' && !empty($job['message'])) {
             $message = $job['message'];
         } elseif ($status === 'failed' && !empty($job['error'])) {
-            $message = $job['error'];
+            if ($this->is_sync_enabled() && self::is_credentials_configuration_error($job['error'])) {
+                $status = 'idle';
+                $job['error'] = '';
+                $this->save_job(array(
+                    'status' => 'idle',
+                    'error' => '',
+                    'updated_at' => time(),
+                ));
+            } else {
+                $message = $job['error'];
+            }
         } elseif ($this->job_is_active($job)) {
             $message = sprintf(
                 /* translators: 1: processed count, 2: total count */
@@ -529,7 +552,7 @@ class Kiyoh_Rating_Manager {
             'total' => $total,
             'percent' => $percent,
             'message' => $message,
-            'error' => isset($job['error']) ? $job['error'] : '',
+            'error' => ($status === 'failed' && isset($job['error'])) ? $job['error'] : '',
             'last_sync' => isset($state['last_sync_local']) ? $state['last_sync_local'] : '',
             'last_result' => isset($state['last_result']) ? $state['last_result'] : array()
         );
