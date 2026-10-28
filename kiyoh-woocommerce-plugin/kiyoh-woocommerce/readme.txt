@@ -4,7 +4,7 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.4.2
+Stable tag: 1.4.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
@@ -36,6 +36,11 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 * Deactivate keeps that data and stops scheduled jobs. Delete removes options, tables, cron, and transients, and revokes the shop at Kiyoh-Connect.
 
 == Changelog ==
+
+= 1.4.3 =
+* The General tab notice follows the saved plugin switch, Location ID, and API key. A stale "credentials not configured" rating-sync error is cleared once those are saved.
+* Test API Connection reports a rejected API key instead of a successful connection. Editing the key and saving shows **Manual connection.**
+* Disconnect Kiyoh-Connect is available after Connect. On an HTTP shop, Connect shows that HTTPS is required and does not redirect.
 
 = 1.4.2 =
 * Connect with Kiyoh closes the sign-in popup and refreshes the original WooCommerce → Kiyoh tab to Connected. If that tab is no longer the opener, the same window opens the settings page.

@@ -539,6 +539,7 @@ class Kiyoh_Admin {
 
             $new_location = sanitize_text_field($input['general']['location_id'] ?? '');
             $new_key = sanitize_text_field($input['general']['api_key'] ?? '');
+            $credential_touch = sanitize_text_field($input['general']['credential_touch'] ?? '');
             $old_location = '';
             $old_key = '';
             $old_source = 'manual';
@@ -552,7 +553,7 @@ class Kiyoh_Admin {
                 $source = 'connect';
             } elseif ($apply_mode === 'disconnect') {
                 $source = 'manual';
-            } elseif ($new_location !== $old_location || $new_key !== $old_key) {
+            } elseif ($credential_touch === 'manual' || $new_location !== $old_location || $new_key !== $old_key) {
                 $source = 'manual';
                 if ($old_source === 'connect' && class_exists('Kiyoh_Connect_Session')) {
                     Kiyoh_Connect_Session::on_manual_override();
@@ -973,8 +974,12 @@ class Kiyoh_Admin {
             } else {
                 $client = Kiyoh_Api_Factory::create_client();
                 $response = $client->get_company_stats();
+                $payload = $response->is_success() ? $response->get_data() : array(
+                    'errorCode' => $response->get_error_code(),
+                );
+                $assessment = Kiyoh_Api_Client::assess_statistics_payload((int) $response->get_response_code(), $payload);
 
-                if ($response->is_success()) {
+                if ($assessment['ok']) {
                     $data = $response->get_data();
                     $result = array(
                         'success' => true,
@@ -983,9 +988,14 @@ class Kiyoh_Admin {
                         'http_status' => $response->get_response_code(),
                     );
                 } else {
+                    $detail = $response->get_error();
+                    $message = $assessment['message'];
+                    if ($message === 'API connection failed.' && is_string($detail) && $detail !== '') {
+                        $message = 'API connection failed: ' . $detail;
+                    }
                     $result = array(
                         'success' => false,
-                        'message' => 'API connection failed: ' . $response->get_error(),
+                        'message' => $message,
                         'error_code' => $response->get_error_code(),
                         'http_status' => $response->get_response_code(),
                     );
