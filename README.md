@@ -84,7 +84,7 @@ Once installed, you'll see a new "Kiyoh" option in your WordPress admin under **
 In the **General Settings** section:
 - **Enable Plugin**: Set to **Yes**
 - **Platform**: Select Kiyoh.com or Klantenvertellen.nl
-- **Connect with Kiyoh / Klantenvertellen**: signs the merchant in on Kiyoh-Connect and fills the Location ID and API key. The shop must be HTTPS with pretty permalinks. No extra secrets in `wp-config.php`. Connect gives this shop its own secret on the first successful sign-in and the plugin stores that secret encrypted.
+- **Connect with Kiyoh / Klantenvertellen**: signs the merchant in on Kiyoh-Connect and fills the Location ID and API key. The shop must be HTTPS with pretty permalinks. No extra secrets in `wp-config.php`. Connect gives this shop its own secret on the first successful sign-in and the plugin stores that secret encrypted. After the location is chosen the popup closes and this settings tab shows Connected. If the browser did not keep the popup attached to this tab, the popup window itself opens the settings page.
 - **Existing installs** can skip Connect and keep typing the Location ID and API key. Saving a change to either field keeps that manual key.
 - Click **Save Changes** after a manual key. Connect saves the key itself.
 
@@ -243,7 +243,7 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.4.1  
+**Version**: 1.4.2  
 **Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary

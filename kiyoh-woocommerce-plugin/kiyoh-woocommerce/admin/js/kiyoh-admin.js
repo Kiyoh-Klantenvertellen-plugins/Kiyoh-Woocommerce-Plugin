@@ -56,6 +56,8 @@
             $(document).on('click', '#kiyoh-connect-disconnect', this.handleConnectDisconnect);
         },
 
+        connectPopup: null,
+
         listenForConnect: function () {
             window.addEventListener('message', function (event) {
                 if (!window.kiyohAdminData || !window.kiyohAdminData.callbackOrigin) {
@@ -64,10 +66,21 @@
                 if (event.origin !== window.kiyohAdminData.callbackOrigin) {
                     return;
                 }
+                if (!KiyohAdmin.connectPopup || event.source !== KiyohAdmin.connectPopup) {
+                    return;
+                }
                 var data = event.data || {};
                 if (data.source !== 'kiyoh-connect') {
                     return;
                 }
+                try {
+                    event.source.postMessage({ source: 'kiyoh-connect-ack' }, event.origin);
+                } catch (e) {}
+                try {
+                    if (!KiyohAdmin.connectPopup.closed) {
+                        KiyohAdmin.connectPopup.close();
+                    }
+                } catch (e) {}
                 if (data.ok) {
                     var url = window.kiyohAdminData.settingsUrl || window.location.href;
                     window.location = url + (url.indexOf('?') >= 0 ? '&' : '?') + 'kiyoh_connect=connected';
@@ -88,7 +101,8 @@
             if (!window.kiyoh_admin_ajax || !window.kiyohAdminData) {
                 return;
             }
-            var popup = window.open('', 'kiyoh_connect', 'width=520,height=760');
+            var popup = window.open('', 'kiyoh_connect', 'popup=yes,width=520,height=760');
+            KiyohAdmin.connectPopup = popup || null;
             $('#kiyoh-connect-start').prop('disabled', true);
             $.post(kiyoh_admin_ajax.ajax_url, {
                 action: 'kiyoh_connect_start',
@@ -100,6 +114,7 @@
                     if (popup) {
                         popup.close();
                     }
+                    KiyohAdmin.connectPopup = null;
                     var message = response && response.data && response.data.message ? response.data.message : 'Kiyoh-Connect could not start.';
                     KiyohAdmin.showConnectResult('error', message);
                     return;
@@ -113,6 +128,7 @@
                 if (popup) {
                     popup.close();
                 }
+                KiyohAdmin.connectPopup = null;
                 var message = xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message
                     ? xhr.responseJSON.data.message
                     : 'Kiyoh-Connect could not start.';

@@ -1,7 +1,7 @@
 # PLUGIN_SPEC — Kiyoh WooCommerce
 
 **Shape:** A + B (WordPress/WooCommerce plugin and Kiyoh / Kiyoh-Connect / Kiyoh Mobile connector)
-**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.1
+**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.2
 
 ## Host
 - Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.2.1). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.
@@ -33,7 +33,7 @@
 - Webhooks: none. This plugin does not receive webhooks.
 
 ## Behaviour
-- Trigger: merchant clicks Connect (popup). Registration runs only when this issuer and return address have no reusable shop secret. Daily health cron, plus health on Connect credential save, settings save, invite, and product sync. Invites on order status.
+- Trigger: merchant clicks Connect (popup). Registration runs only when this issuer and return address have no reusable shop secret. After the callback, the popup tells the settings tab and closes; the tab reloads Connected. With no opener, the popup window opens the settings page. Daily health cron, plus health on Connect credential save, settings save, invite, and product sync. Invites on order status.
 - Failure policy: Connect errors stay on the settings screen. An active secret is saved before the popup, because Connect shows it once. A pending secret is saved only after the token call succeeds. A publication 401 refreshes Connect once when the shop is connected, then retries that call once. Manual keys are not overwritten by a refresh. Health failures never stop checkout or invites.
 - Idempotency: the same return address reuses `shop_id` and `shop_secret` and does not call register. The OAuth `state` transient is single-use and lasts 15 minutes. Location id and invite key are written only after both the token and the credentials call succeed. A second callback with the same state does not write again. Switching the platform (Kiyoh vs Klantenvertellen) does not reuse the other issuer's secret.
 
@@ -59,7 +59,7 @@
 - Secrets: no shared HMAC key and no client secret in the zip, JavaScript, logs, or authorize URL. The per-shop secret and the refresh and access tokens are encrypted. Editing the Location ID or API key clears the refresh and access tokens and stops automatic overwrite; the shop secret stays so the same return address can connect again.
 - Least privilege: `manage_woocommerce` only, scope `integration:connect` only.
 - Input: callback code and state are charset-checked. Registration requires `shop_id`, a 16–256 character `shop_secret`, and status `active` or `pending`. Echoed `client_id`, `shop_origin`, and `redirect_uri` must match what was sent. Credentials require `locationId`, tenant 98 or 99, and `inviteApiKey`. Return addresses must be the exact callback path.
-- Output: settings page escapes text. Callback HTML escapes the message and refuses a next URL on another host. `Referrer-Policy: no-referrer` and `Cache-Control: no-store` on the callback document.
+- Output: settings page escapes text. Callback HTML escapes the message and refuses a next URL on another host. The popup postMessages `{source:kiyoh-connect}` only to the stored shop origin (never `*`). The settings tab checks `event.origin` and `event.source` (the window it opened), replies with `{source:kiyoh-connect-ack}` to that same callback origin, closes the popup, and reloads. With no opener, the callback window navigates to the settings URL. `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, and `Cross-Origin-Opener-Policy: unsafe-none` on the callback document.
 - SQL: table names are whitelisted identifiers. Values use `$wpdb->prepare`. WordPress 5.8 has no `%i` placeholder.
 - AuthZ: start and disconnect check the capability and a nonce. The callback is bound to the state created by that admin.
 - CSRF: settings use the WordPress settings nonce. Connect start/disconnect use their own nonces. The external redirect uses `state`.
@@ -77,7 +77,7 @@
 - HPOS: already declared. No new checkout markup.
 
 ## Acceptance test
-1. On an HTTPS shop with pretty permalinks, click **Connect with Kiyoh / Klantenvertellen** with no Connect values in `wp-config.php`. Finish login on the matching Connect host. The location id and invite key are saved. **Test API Connection** succeeds.
+1. On an HTTPS shop with pretty permalinks, click **Connect with Kiyoh / Klantenvertellen** with no Connect values in `wp-config.php`. Finish login on the matching Connect host. The popup closes. The original WooCommerce → Kiyoh tab reloads and shows Connected, and the location id and invite key are saved. **Test API Connection** succeeds. If the browser drops `window.opener`, that same popup window opens the Kiyoh settings page instead of staying on the callback.
 2. Click Connect again for the same return address. The plugin does not call `/shops/register` again. The saved location is replaced only after a new successful login. A replay of the old callback does not write a second set of credentials.
 3. Changing the site URL so the callback changes causes a new registration. The pending secret replaces the stored secret only after the code exchange succeeds. Closing the popup before that leaves the previous secret in place.
 4. Stopping the popup before login on a first-time `active` registration keeps the secret so the next click can reuse it. Starting again after 15 minutes requires a new popup.

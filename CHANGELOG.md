@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.2
+
+### Fixed
+- **Connect with Kiyoh / Klantenvertellen** closes the sign-in popup after the location is chosen. The callback page postMessages the WooCommerce settings tab (shop origin only, never `*`) and that tab closes the popup and reloads as Connected. If the popup has no opener — the browser blocked it, or the opener link was dropped — the same window opens the Kiyoh settings page instead.
+
 ## v1.4.1
 
 ### Fixed
