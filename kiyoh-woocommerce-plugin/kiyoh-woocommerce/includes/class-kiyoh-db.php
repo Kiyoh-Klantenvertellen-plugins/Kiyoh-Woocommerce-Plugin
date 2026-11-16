@@ -80,6 +80,7 @@ class Kiyoh_Db {
             'kiyoh_process_scheduled_invitations',
             'kiyoh_cleanup_cache',
             'kiyoh_sync_product_ratings',
+            'kiyoh_daily_full_rating_sync',
             'kiyoh_process_rating_sync',
             'kiyoh_report_mobile_health',
             'kiyoh_send_scheduled_invitation',
