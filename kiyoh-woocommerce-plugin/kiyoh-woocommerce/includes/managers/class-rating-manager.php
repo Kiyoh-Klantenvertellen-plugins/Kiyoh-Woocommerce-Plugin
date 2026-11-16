@@ -15,7 +15,8 @@ class Kiyoh_Rating_Manager {
     const CRON_PROCESS = 'kiyoh_process_rating_sync';
     const LOCK_TRANSIENT = 'kiyoh_rating_sync_lock';
     const FULL_SYNC_SINCE = '2000-01-01T00:00:00.000Z';
-    const INCREMENTAL_OVERLAP_SECONDS = 300;
+    const INCREMENTAL_OVERLAP_SECONDS = 3600;
+    const CRON_DAILY_FULL = 'kiyoh_daily_full_rating_sync';
     const PRODUCT_REQUEST_INTERVAL = 3;
     const JOB_CHUNK_SIZE = 1;
     const JOB_STALE_SECONDS = 600;
@@ -41,6 +42,7 @@ class Kiyoh_Rating_Manager {
         self::$hooks_registered = true;
 
         add_action('kiyoh_sync_product_ratings', array($this, 'sync_incremental'));
+        add_action(self::CRON_DAILY_FULL, array($this, 'cron_daily_full_sync'));
         add_action(self::CRON_PROCESS, array($this, 'process_job_chunk'));
         add_action('update_option_kiyoh_woocommerce_settings', array($this, 'handle_settings_update'), 10, 2);
 
@@ -67,6 +69,9 @@ class Kiyoh_Rating_Manager {
         if (!wp_next_scheduled('kiyoh_sync_product_ratings')) {
             wp_schedule_event(time(), 'hourly', 'kiyoh_sync_product_ratings');
         }
+        if (!wp_next_scheduled(self::CRON_DAILY_FULL)) {
+            wp_schedule_event(time() + 3600, 'daily', self::CRON_DAILY_FULL);
+        }
     }
 
     public static function unschedule_cron() {
@@ -75,7 +80,24 @@ class Kiyoh_Rating_Manager {
             wp_unschedule_event($timestamp, 'kiyoh_sync_product_ratings');
         }
         wp_clear_scheduled_hook('kiyoh_sync_product_ratings');
+
+        $daily = wp_next_scheduled(self::CRON_DAILY_FULL);
+        if ($daily) {
+            wp_unschedule_event($daily, self::CRON_DAILY_FULL);
+        }
+        wp_clear_scheduled_hook(self::CRON_DAILY_FULL);
         wp_clear_scheduled_hook(self::CRON_PROCESS);
+    }
+
+    /**
+     * Daily safety net: queue a full rating sync so paginated catalogue data cannot drift.
+     */
+    public function cron_daily_full_sync() {
+        if (!$this->is_sync_enabled() || !$this->needs_review_sync()) {
+            return;
+        }
+
+        $this->queue_full_sync();
     }
 
     private function ensure_cron_scheduled() {
@@ -426,6 +448,7 @@ class Kiyoh_Rating_Manager {
 
         $this->applied_skus = array();
         $this->imported_product_ids = array();
+        $sync_started_utc = gmdate('Y-m-d\TH:i:s.000\Z');
         $updated_since = $full || $since === '' ? self::FULL_SYNC_SINCE : $since;
         $review_ok = false;
         $update_ok = false;
@@ -473,7 +496,7 @@ class Kiyoh_Rating_Manager {
         $this->finalize_imported_reviews();
 
         $results['success'] = true;
-        $this->store_sync_state($updated_since, $results);
+        $this->store_sync_state($updated_since, $results, $sync_started_utc);
 
         error_log(sprintf(
             'Kiyoh Rating Sync: Updated %d product(s) from %d cluster(s) (unmatched: %d, skipped: %d, imported: %d)',
@@ -618,6 +641,7 @@ class Kiyoh_Rating_Manager {
             'status' => 'queued',
             'full' => (bool) $full,
             'since' => $full ? self::FULL_SYNC_SINCE : $this->incremental_since(),
+            'sync_started_utc' => gmdate('Y-m-d\TH:i:s.000\Z'),
             'phase' => 'bootstrap',
             'started_at' => current_time('mysql'),
             'updated_at' => time(),
@@ -822,7 +846,12 @@ class Kiyoh_Rating_Manager {
 
         $results = isset($job['results']) && is_array($job['results']) ? $job['results'] : $this->empty_sync_results();
         $results['success'] = true;
-        $this->store_sync_state(isset($job['requested_since']) ? $job['requested_since'] : self::FULL_SYNC_SINCE, $results);
+        $sync_started_utc = !empty($job['sync_started_utc']) ? $job['sync_started_utc'] : gmdate('Y-m-d\TH:i:s.000\Z');
+        $this->store_sync_state(
+            isset($job['requested_since']) ? $job['requested_since'] : self::FULL_SYNC_SINCE,
+            $results,
+            $sync_started_utc
+        );
 
         $job['results'] = $results;
         $job['status'] = 'completed';
@@ -948,9 +977,13 @@ class Kiyoh_Rating_Manager {
         }
     }
 
-    private function store_sync_state($requested_since, $results) {
+    private function store_sync_state($requested_since, $results, $sync_started_utc = '') {
+        if ($sync_started_utc === '') {
+            $sync_started_utc = gmdate('Y-m-d\TH:i:s.000\Z');
+        }
+
         update_option(self::OPTION_SYNC_STATE, array(
-            'last_sync_utc' => gmdate('Y-m-d\TH:i:s.000\Z'),
+            'last_sync_utc' => $sync_started_utc,
             'requested_since' => $requested_since,
             'last_result' => $results,
             'last_sync_local' => current_time('mysql')

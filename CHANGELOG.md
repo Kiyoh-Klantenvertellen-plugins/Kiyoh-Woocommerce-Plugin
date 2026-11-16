@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.4.4
+
+### Fixed
+- **Product review and rating sync** now pages through the Kiyoh publication API (`start` / `limit` on each request) instead of importing only the first page. The incremental cursor (`last_sync_utc`) moves forward only after every page succeeds, and it is set to the sync start time so a partial run cannot skip later pages. Incremental overlap is widened to one hour, and a daily WP-Cron job queues a full rating sync as a safety net.
+
 ## v1.4.2
 
 ### Fixed

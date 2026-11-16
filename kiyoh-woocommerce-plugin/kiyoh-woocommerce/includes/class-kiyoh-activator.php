@@ -224,6 +224,10 @@ class Kiyoh_Activator {
             wp_schedule_event(time(), 'hourly', 'kiyoh_sync_product_ratings');
         }
 
+        if (!wp_next_scheduled('kiyoh_daily_full_rating_sync')) {
+            wp_schedule_event(time() + 3600, 'daily', 'kiyoh_daily_full_rating_sync');
+        }
+
         // Daily shop-health heartbeat for Kiyoh Mobile. Unchanged reports are
         // sent again after 24h so the server heartbeat stays inside 48h.
         if (!wp_next_scheduled('kiyoh_report_mobile_health')) {
