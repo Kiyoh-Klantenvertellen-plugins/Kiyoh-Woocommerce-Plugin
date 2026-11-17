@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.3
+
+### Fixed
+- **Kiyoh Mobile health** stops hammering the integrations endpoint when credentials are wrong or the server errors. HTTP 401/403 records a credential fingerprint and pauses health posts until the API key or Location ID changes or Connect saves again. Other failures use exponential backoff (from 5 minutes, capped at 24 hours). HTTP 429 still honours `Retry-After`.
+- Health posts are coalesced to at most one per request, one per paginated product-sync AJAX batch, and at least 10 minutes apart for non-cron sends (daily `kiyoh_report_mobile_health` is unchanged).
+- **WooCommerce → Kiyoh** shows an admin notice when Kiyoh Mobile has rejected the saved credentials.
+
 ## v1.4.2
 
 ### Fixed
@@ -30,8 +37,8 @@
 ### Added
 - **Kiyoh Mobile shop health.** The plugin posts to `POST {url}/api/integrations/health` for each base URL in **WooCommerce → Kiyoh → General → Kiyoh Mobile URL(s)** (comma-separated). Leave the field blank to use the `KIYOH_MOBILE_URLS` constant, which defaults to `https://kiyoh-mobile.com,https://kiyohmobileui-staging.up.railway.app`. The `kiyoh_mobile_urls` filter overrides both.
 - Headers are `X-Publication-Api-Token` and `X-Location-Id` from the saved API key and Location ID. The body uses `platform=woocommerce`, `shopId` set to the site domain, and `pluginVersion`. Groups are `connection`, `invites` (`lastOkAt`, `failures24h`), `productSync` (including up to 500 product codes), and `widget` (`injected` when Kiyoh ministars are active).
-- A report is queued when settings are saved, credentials change, the connection test finishes, an invite is sent or fails, or products are synced. Those events share one HTTP call per URL at the end of the request. A daily WP-Cron event (`kiyoh_report_mobile_health`) sends again when the payload changed or the last success is older than 24 hours, so the server heartbeat stays inside the 48-hour stale window.
-- The call is `wp_remote_post` with a 2-second timeout. HTTP 429 stores `Retry-After` (or `retryAfterSeconds`) and does not retry until that time. A health failure is logged and does not change invite or checkout behaviour. Reports are skipped when the API key or Location ID is missing. Clearing credentials stops the heartbeat; Kiyoh Mobile then shows the shop as stale after 48 hours.
+- A report is queued when settings are saved, credentials change, the connection test finishes, an invite is sent or fails, or products are synced. Those events share one HTTP call per URL at the end of the request, at most every 10 minutes unless the daily cron runs. A daily WP-Cron event (`kiyoh_report_mobile_health`) sends again when the payload changed or the last success is older than 24 hours, so the server heartbeat stays inside the 48-hour stale window.
+- The call is `wp_remote_post` with a 2-second timeout. HTTP 429 stores `Retry-After` (or `retryAfterSeconds`) and does not retry until that time. HTTP 401/403 pause until credentials change; other failures use exponential backoff (from 5 minutes, capped at 24 hours). A health failure is logged and does not change invite or checkout behaviour. Reports are skipped when the API key or Location ID is missing. Clearing credentials stops the heartbeat; Kiyoh Mobile then shows the shop as stale after 48 hours.
 
 ## v1.2.1
 

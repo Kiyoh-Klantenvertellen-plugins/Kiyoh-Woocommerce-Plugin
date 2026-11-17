@@ -27,12 +27,24 @@ class Kiyoh_Mobile_Health {
     const MAX_FAILURES = 1000000;
     const MAX_STORED_FAILURES = 5000;
     const DEFAULT_RETRY_AFTER_SECONDS = 60;
+    /** Minimum time between opportunistic health posts (shutdown, events). Daily cron is exempt. */
+    const MIN_SEND_INTERVAL_SECONDS = 600;
+    /** First wait after a transient error (5xx, timeout, other non-auth failures). */
+    const BACKOFF_INITIAL_SECONDS = 300;
+    /** Cap for exponential backoff on transient errors. */
+    const BACKOFF_MAX_SECONDS = 86400;
 
     /**
      * @return array
      */
     public static function empty_state() {
         return array(
+            'auth' => array(
+                'rejected_credentials_hash' => '',
+            ),
+            'publish' => array(
+                'last_attempt_at' => 0,
+            ),
             'connection' => array(
                 'status' => 'unknown',
                 'last_ok_at' => null,
@@ -66,11 +78,21 @@ class Kiyoh_Mobile_Health {
             return $base;
         }
 
-        foreach (array('connection', 'invites', 'product_sync', 'widget') as $group) {
+        foreach (array('auth', 'publish', 'connection', 'invites', 'product_sync', 'widget') as $group) {
             if (isset($state[$group]) && is_array($state[$group])) {
                 $base[$group] = array_merge($base[$group], $state[$group]);
             }
         }
+
+        $rejected_hash = isset($base['auth']['rejected_credentials_hash']) ? (string) $base['auth']['rejected_credentials_hash'] : '';
+        if (strlen($rejected_hash) !== 64 || !ctype_xdigit($rejected_hash)) {
+            $base['auth']['rejected_credentials_hash'] = '';
+        } else {
+            $base['auth']['rejected_credentials_hash'] = strtolower($rejected_hash);
+        }
+
+        $last_attempt = isset($base['publish']['last_attempt_at']) ? (int) $base['publish']['last_attempt_at'] : 0;
+        $base['publish']['last_attempt_at'] = max(0, $last_attempt);
 
         if (isset($state['reports']) && is_array($state['reports'])) {
             $base['reports'] = $state['reports'];
@@ -287,6 +309,78 @@ class Kiyoh_Mobile_Health {
      */
     public static function credentials_changed($old, $new) {
         return self::credentials_from_settings($old) !== self::credentials_from_settings($new);
+    }
+
+    /**
+     * @param array{api_token: string, location_id: string} $credentials
+     * @return string
+     */
+    public static function credentials_hash($credentials) {
+        if (!is_array($credentials)) {
+            return '';
+        }
+        $token = isset($credentials['api_token']) ? (string) $credentials['api_token'] : '';
+        $location = isset($credentials['location_id']) ? (string) $credentials['location_id'] : '';
+        if ($token === '' || $location === '') {
+            return '';
+        }
+
+        return hash('sha256', $token . "\0" . $location);
+    }
+
+    /**
+     * @param array $state
+     * @param mixed $settings
+     * @param int   $now
+     * @return bool
+     */
+    public static function credentials_rejected_for_settings($state, $settings, $now) {
+        $state = self::normalize_state($state, $now);
+        $rejected = isset($state['auth']['rejected_credentials_hash']) ? (string) $state['auth']['rejected_credentials_hash'] : '';
+        if ($rejected === '') {
+            return false;
+        }
+
+        $hash = self::credentials_hash(self::credentials_from_settings($settings));
+        return $hash !== '' && hash_equals($rejected, $hash);
+    }
+
+    /**
+     * @param array $state
+     * @return array
+     */
+    public static function clear_credentials_rejection($state) {
+        if (!is_array($state)) {
+            $state = self::empty_state();
+        }
+        if (!isset($state['auth']) || !is_array($state['auth'])) {
+            $state['auth'] = self::empty_state()['auth'];
+        }
+        $state['auth']['rejected_credentials_hash'] = '';
+
+        return $state;
+    }
+
+    /**
+     * @param int $fail_streak Failures since the last success, minimum 1.
+     * @return int
+     */
+    public static function transient_backoff_seconds($fail_streak) {
+        $fail_streak = max(1, (int) $fail_streak);
+        $seconds = self::BACKOFF_INITIAL_SECONDS;
+        $multiplier = 1;
+        for ($i = 1; $i < $fail_streak; $i++) {
+            $multiplier *= 2;
+            if ($multiplier > (int) (self::BACKOFF_MAX_SECONDS / self::BACKOFF_INITIAL_SECONDS)) {
+                break;
+            }
+        }
+        $seconds *= $multiplier;
+        if ($seconds > self::BACKOFF_MAX_SECONDS) {
+            $seconds = self::BACKOFF_MAX_SECONDS;
+        }
+
+        return $seconds;
     }
 
     /**
@@ -587,6 +681,8 @@ class Kiyoh_Mobile_Health {
         $before = self::credentials_from_settings($old);
         $after = self::credentials_from_settings($new);
 
+        $state = self::clear_credentials_rejection($state);
+
         $state['connection']['status'] = 'unknown';
         $state['connection']['last_ok_at'] = null;
         $state['connection']['last_error'] = null;
@@ -698,9 +794,30 @@ class Kiyoh_Mobile_Health {
      * @param mixed  $report
      * @param string $digest
      * @param int    $now
+     * @param array  $context credentials_hash, rejected_credentials_hash, force, last_publish_attempt_at
      * @return bool
      */
-    public static function should_send($report, $digest, $now) {
+    public static function should_send($report, $digest, $now, $context = array()) {
+        if (!is_array($context)) {
+            $context = array();
+        }
+
+        $credentials_hash = isset($context['credentials_hash']) ? (string) $context['credentials_hash'] : '';
+        $rejected_hash = isset($context['rejected_credentials_hash']) ? (string) $context['rejected_credentials_hash'] : '';
+        if (
+            $credentials_hash !== ''
+            && $rejected_hash !== ''
+            && hash_equals($rejected_hash, $credentials_hash)
+        ) {
+            return false;
+        }
+
+        $force = !empty($context['force']);
+        $last_attempt = isset($context['last_publish_attempt_at']) ? (int) $context['last_publish_attempt_at'] : 0;
+        if (!$force && $last_attempt > 0 && ((int) $now - $last_attempt) < self::MIN_SEND_INTERVAL_SECONDS) {
+            return false;
+        }
+
         if (!is_array($report)) {
             return true;
         }
@@ -772,25 +889,32 @@ class Kiyoh_Mobile_Health {
      * @param int    $status
      * @param mixed  $retry_after_header
      * @param mixed  $body
+     * @param string $credentials_hash Hash of api token and location id at send time.
      * @return array
      */
-    public static function apply_post_result($state, $url, $digest, $now, $status, $retry_after_header, $body) {
+    public static function apply_post_result($state, $url, $digest, $now, $status, $retry_after_header, $body, $credentials_hash = '') {
         $state = self::normalize_state($state, $now);
+        $state['publish']['last_attempt_at'] = (int) $now;
+
         $current = array(
             'digest' => '',
             'at' => 0,
             'blocked_until' => 0,
+            'fail_streak' => 0,
         );
         if (isset($state['reports'][$url]) && is_array($state['reports'][$url])) {
             $current = array_merge($current, $state['reports'][$url]);
         }
+        $current['fail_streak'] = isset($current['fail_streak']) ? max(0, (int) $current['fail_streak']) : 0;
 
         $status = (int) $status;
         if ($status >= 200 && $status < 300) {
             $current['digest'] = $digest;
             $current['at'] = (int) $now;
             $current['blocked_until'] = 0;
+            $current['fail_streak'] = 0;
             $state['reports'][$url] = $current;
+            $state = self::clear_credentials_rejection($state);
             return $state;
         }
 
@@ -801,7 +925,21 @@ class Kiyoh_Mobile_Health {
             return $state;
         }
 
-        $current['blocked_until'] = 0;
+        if ($status === 401 || $status === 403) {
+            if ($credentials_hash !== '') {
+                if (!isset($state['auth']) || !is_array($state['auth'])) {
+                    $state['auth'] = self::empty_state()['auth'];
+                }
+                $state['auth']['rejected_credentials_hash'] = $credentials_hash;
+            }
+            $current['blocked_until'] = (int) $now + self::BACKOFF_MAX_SECONDS;
+            $state['reports'][$url] = $current;
+            return $state;
+        }
+
+        $current['fail_streak'] = $current['fail_streak'] + 1;
+        $backoff = self::transient_backoff_seconds($current['fail_streak']);
+        $current['blocked_until'] = (int) $now + $backoff;
         $state['reports'][$url] = $current;
         return $state;
     }

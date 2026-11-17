@@ -227,10 +227,74 @@ expect_same($now + Kiyoh_Mobile_Health::DEFAULT_RETRY_AFTER_SECONDS, $state['rep
 $http_date = gmdate('D, d M Y H:i:s', $now + 15) . ' GMT';
 expect_same(15, Kiyoh_Mobile_Health::parse_retry_after_header($http_date, $now), 'an HTTP-date Retry-After is converted to seconds');
 
-$missed = Kiyoh_Mobile_Health::apply_post_result(Kiyoh_Mobile_Health::empty_state(), $production, $same, $now + 20, 500, '', '');
+$cred_hash = Kiyoh_Mobile_Health::credentials_hash(array('api_token' => 'tok', 'location_id' => 'loc'));
+expect_same(64, strlen($cred_hash), 'credentials hash is a sha256 hex string');
+
+$missed = Kiyoh_Mobile_Health::apply_post_result(Kiyoh_Mobile_Health::empty_state(), $production, $same, $now + 20, 500, '', '', $cred_hash);
 expect_same(0, $missed['reports'][$production]['at'], 'HTTP 500 is not stored as success');
-expect_true(Kiyoh_Mobile_Health::should_send($missed['reports'][$production], $same, $now + 20), 'HTTP 500 is retried on the next send');
-$state = Kiyoh_Mobile_Health::apply_post_result($state, $production, $same, $now + 20, 500, '', '');
+expect_same(
+    $now + 20 + Kiyoh_Mobile_Health::BACKOFF_INITIAL_SECONDS,
+    $missed['reports'][$production]['blocked_until'],
+    'HTTP 500 uses the initial backoff window'
+);
+expect_false(
+    Kiyoh_Mobile_Health::should_send($missed['reports'][$production], $same, $now + 21),
+    'HTTP 500 is not retried until backoff elapses'
+);
+expect_true(
+    Kiyoh_Mobile_Health::should_send($missed['reports'][$production], $same, $now + 20 + Kiyoh_Mobile_Health::BACKOFF_INITIAL_SECONDS + 1),
+    'HTTP 500 allows a send after backoff'
+);
+
+$auth_fail = Kiyoh_Mobile_Health::apply_post_result(Kiyoh_Mobile_Health::empty_state(), $production, $same, $now + 25, 401, '', '', $cred_hash);
+expect_same($cred_hash, $auth_fail['auth']['rejected_credentials_hash'], '401 stores the credentials fingerprint');
+expect_false(
+    Kiyoh_Mobile_Health::should_send(
+        $auth_fail['reports'][$production],
+        $same,
+        $now + 30,
+        array(
+            'credentials_hash' => $cred_hash,
+            'rejected_credentials_hash' => $cred_hash,
+        )
+    ),
+    '401 stops sends until credentials change'
+);
+$auth_fail = Kiyoh_Mobile_Health::clear_credentials_rejection($auth_fail);
+expect_true(
+    Kiyoh_Mobile_Health::should_send($auth_fail['reports'][$production], 'new-digest', $now + 30),
+    'clearing rejection allows a send again'
+);
+
+expect_false(
+    Kiyoh_Mobile_Health::should_send(
+        null,
+        $same,
+        $now + 100,
+        array('last_publish_attempt_at' => $now + 50)
+    ),
+    'minimum send interval blocks rapid opportunistic posts'
+);
+expect_true(
+    Kiyoh_Mobile_Health::should_send(
+        null,
+        $same,
+        $now + 50 + Kiyoh_Mobile_Health::MIN_SEND_INTERVAL_SECONDS + 1,
+        array('last_publish_attempt_at' => $now + 50)
+    ),
+    'minimum send interval allows a send after the wait'
+);
+expect_true(
+    Kiyoh_Mobile_Health::should_send(
+        null,
+        $same,
+        $now + 55,
+        array('last_publish_attempt_at' => $now + 50, 'force' => true)
+    ),
+    'forced sends bypass the minimum interval'
+);
+
+$state = Kiyoh_Mobile_Health::apply_post_result($state, $production, $same, $now + 20, 500, '', '', $cred_hash);
 
 $state = Kiyoh_Mobile_Health::apply_post_result($state, $production, $same, $now + 21, 200, '', '');
 expect_same($same, $state['reports'][$production]['digest'], 'HTTP 200 stores the payload digest');
