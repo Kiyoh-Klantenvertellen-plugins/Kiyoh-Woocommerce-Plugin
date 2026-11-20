@@ -1,7 +1,7 @@
 # PLUGIN_SPEC — Kiyoh WooCommerce
 
 **Shape:** A + B (WordPress/WooCommerce plugin and Kiyoh / Kiyoh-Connect / Kiyoh Mobile connector)
-**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.2
+**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.4
 
 ## Host
 - Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.2.1). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.
@@ -27,7 +27,7 @@
   - Refresh form: `grant_type=refresh_token`, `refresh_token`, `client_id`, `shop_id`, `shop_secret`. A new refresh token replaces the stored one.
   - `POST {issuer}/revoke` form: `token`, `client_id`, `shop_id`, `shop_secret`.
   - `POST {issuer}/shops/revoke` JSON: `client_id`, `shop_id`, `shop_secret`. Disconnect and uninstall both send this after the token revoke. If the shop secret cannot be decrypted, the remote revoke is skipped and local data is still deleted.
-- Kiyoh Mobile health: `KIYOH_MOBILE_URLS` (default `https://kiyoh-mobile.com` only; testers set staging in the field), overridden by the setting, overridden by the `kiyoh_mobile_urls` filter. `POST /api/integrations/health`. Body includes `webhooks.lastReceivedAt` (null; this plugin has no webhook receiver).
+- Kiyoh Mobile health: default `https://kiyoh-mobile.com` only. Testers override with `KIYOH_MOBILE_URLS` (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter (filter wins). No merchant-facing URL field. `POST /api/integrations/health`. Body includes `webhooks.lastReceivedAt` (null; this plugin has no webhook receiver).
 - Auth: Connect is OAuth 2.1 authorization code + PKCE with a per-shop secret. The publication API uses the invite key from Connect, or a manually pasted key.
 - Rate limits: Connect and Mobile 429 honour `Retry-After`, else `retryAfterSeconds`. Interactive Connect calls stop after 3 attempts or when the wait is over 8 seconds. Backoff cap is 60 seconds. A register 429 tells the merchant to wait. Publication calls are not given a 5-attempt hang inside checkout.
 - Webhooks: none. This plugin does not receive webhooks.
@@ -42,7 +42,7 @@
 - The OAuth callback is a logged-out REST GET because WordPress strips the auth cookie when the Connect redirect has no REST nonce. The unguessable single-use `state` is the CSRF check. The callback does not accept a client-supplied location id or API key.
 
 ## Data stored, retention, uninstall behaviour
-- Option `kiyoh_woocommerce_settings`: enabled, platform, location id, API key, credential source (`connect` or `manual`), mobile URLs, product sync, invitations, ratings.
+- Option `kiyoh_woocommerce_settings`: enabled, platform, location id, API key, credential source (`connect` or `manual`), product sync, invitations, ratings. Legacy `general.mobile_urls` may exist until upgrade strips values that pointed at staging.
 - Option `kiyoh_connect_account` (schema 2, autoload off): issuer, shop origin, redirect URI, location name, tenant id, shop status, and `shop_id`, `shop_secret`, refresh token, and access token encrypted with AES-256-GCM. The key is `hash('sha256', wp_salt('auth'), true)`. Plaintext secrets are not stored.
 - Option `kiyoh_mobile_health`: last report digest and 429 block. Options `kiyoh_woocommerce_version`, `kiyoh_ratings_sync_state`, `kiyoh_ratings_sync_job`.
 - Tables `{prefix}kiyoh_product_sync`, `{prefix}kiyoh_invitations`, `{prefix}kiyoh_review_cache`.
@@ -53,7 +53,7 @@
 
 ## Config precedence
 - Connect has no wp-config secret. `shop_url` is the https origin of the shop. The issuer is chosen only by the platform setting. It is not a free-text URL.
-- Mobile URLs: `kiyoh_mobile_urls` filter, else a non-blank setting, else `KIYOH_MOBILE_URLS`, else `https://kiyoh-mobile.com`.
+- Mobile URLs: `kiyoh_mobile_urls` filter, else `KIYOH_MOBILE_URLS` if non-blank, else a non-blank legacy saved `general.mobile_urls`, else `https://kiyoh-mobile.com`.
 
 ## Security checklist
 - Secrets: no shared HMAC key and no client secret in the zip, JavaScript, logs, or authorize URL. The per-shop secret and the refresh and access tokens are encrypted. Editing the Location ID or API key clears the refresh and access tokens and stops automatic overwrite; the shop secret stays so the same return address can connect again.

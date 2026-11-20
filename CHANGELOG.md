@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.4.4
+
+### Changed
+- Removed **Kiyoh Mobile URL(s)** from WooCommerce → Kiyoh → General. Merchants no longer see staging hostnames or tester-only configuration in the admin UI.
+- Shop health reports post to `https://kiyoh-mobile.com` when nothing is configured. Testers aim at other hosts with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter.
+- On upgrade, a previously saved `mobile_urls` value is removed only when it included the Railway staging origin; production-only saved values are unchanged.
+
 ## v1.4.3
 
 ### Fixed
