@@ -171,16 +171,6 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                             <p class="description"><?php esc_html_e('Filled by Connect, or paste a key from an existing install. Editing either field switches this shop back to the manual key.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
-
-                    <tr>
-                        <th scope="row">
-                            <label for="mobile_urls"><?php esc_html_e('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'); ?></label>
-                        </th>
-                        <td>
-                            <input type="text" id="mobile_urls" name="kiyoh_woocommerce_settings[general][mobile_urls]" value="<?php echo esc_attr(isset($settings['general']['mobile_urls']) ? $settings['general']['mobile_urls'] : ''); ?>" class="regular-text" />
-                            <p class="description"><?php esc_html_e('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to report only to https://kiyoh-mobile.com. Testers: enter https://kiyohmobileui-staging.up.railway.app.', 'kiyoh-woocommerce'); ?></p>
-                        </td>
-                    </tr>
                     
                     <tr>
                         <th scope="row">
