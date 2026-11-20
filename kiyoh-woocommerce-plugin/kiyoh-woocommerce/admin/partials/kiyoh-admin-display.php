@@ -65,6 +65,16 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
             <p><?php echo esc_html($connect_notice); ?></p>
         </div>
     <?php endif; ?>
+
+    <?php
+    $mobile_credentials_rejected = class_exists('Kiyoh_Mobile_Health_Reporter')
+        && Kiyoh_Mobile_Health_Reporter::instance()->mobile_credentials_rejected();
+    ?>
+    <?php if ($mobile_credentials_rejected): ?>
+        <div class="notice notice-error is-dismissible">
+            <p><?php esc_html_e('Kiyoh Mobile: credentials rejected. Update the API key and Location ID or reconnect with Kiyoh-Connect.', 'kiyoh-woocommerce'); ?></p>
+        </div>
+    <?php endif; ?>
     
     <nav class="nav-tab-wrapper">
         <a href="?page=kiyoh-settings&tab=general" class="nav-tab <?php echo $active_tab == 'general' ? 'nav-tab-active' : ''; ?>">

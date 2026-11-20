@@ -21,6 +21,16 @@ class Kiyoh_Mobile_Health_Reporter {
     private $publish_queued = false;
 
     /**
+     * @var int Number of active product-sync jobs deferring publish until the job ends.
+     */
+    private $product_sync_job_depth = 0;
+
+    /**
+     * @var bool When true, publish bypasses the minimum send interval (daily cron only).
+     */
+    private $publish_force = false;
+
+    /**
      * @return self
      */
     public static function instance() {
@@ -89,6 +99,7 @@ class Kiyoh_Mobile_Health_Reporter {
         $this->guard(function () {
             $now = time();
             $state = $this->load_state();
+            $state = Kiyoh_Mobile_Health::clear_credentials_rejection($state);
             $state = Kiyoh_Mobile_Health::apply_connection_result($state, true, null, 200, $now);
             $state = $this->with_current_widget($state, true);
             $this->save_state($state);
@@ -150,8 +161,30 @@ class Kiyoh_Mobile_Health_Reporter {
             );
             $state = $this->with_current_widget($state, false);
             $this->save_state($state);
-            $this->request_publish();
+            if (!$this->product_sync_job_depth) {
+                $this->request_publish();
+            }
         });
+    }
+
+    /**
+     * Batch admin AJAX syncs many products in one request; defer the health POST until the batch ends.
+     */
+    public function begin_product_sync_job() {
+        $this->product_sync_job_depth++;
+    }
+
+    /**
+     * Ends a deferred product-sync job and queues one shared health POST.
+     */
+    public function end_product_sync_job() {
+        if ($this->product_sync_job_depth <= 0) {
+            return;
+        }
+        $this->product_sync_job_depth--;
+        if ($this->product_sync_job_depth === 0) {
+            $this->request_publish();
+        }
     }
 
     /**
@@ -162,17 +195,19 @@ class Kiyoh_Mobile_Health_Reporter {
             $state = $this->load_state();
             $state = $this->with_current_widget($state, true);
             $this->save_state($state);
-            $this->publish_now();
+            $this->publish_now(true);
         });
     }
 
     /**
      * Shutdown hook. Public so WordPress can call it. Safe to run more than once.
      */
-    public function publish_now() {
-        $this->guard(function () {
+    public function publish_now($force = false) {
+        $this->guard(function () use ($force) {
             $this->publish_queued = false;
+            $this->publish_force = (bool) $force;
             $this->publish();
+            $this->publish_force = false;
         });
     }
 
@@ -245,6 +280,7 @@ class Kiyoh_Mobile_Health_Reporter {
         }
 
         $credentials = Kiyoh_Mobile_Health::credentials_from_settings($settings);
+        $credentials_hash = Kiyoh_Mobile_Health::credentials_hash($credentials);
         $now = time();
         $state = $this->with_current_widget($this->load_state(), false);
         $body = Kiyoh_Mobile_Health::build_body($state, $shop_id, $version, $now);
@@ -253,10 +289,21 @@ class Kiyoh_Mobile_Health_Reporter {
             return;
         }
 
+        $send_context = array(
+            'credentials_hash' => $credentials_hash,
+            'rejected_credentials_hash' => isset($state['auth']['rejected_credentials_hash'])
+                ? (string) $state['auth']['rejected_credentials_hash']
+                : '',
+            'force' => $this->publish_force,
+            'last_publish_attempt_at' => isset($state['publish']['last_attempt_at'])
+                ? (int) $state['publish']['last_attempt_at']
+                : 0,
+        );
+
         $changed = false;
         foreach ($urls as $url) {
             $report = isset($state['reports'][$url]) ? $state['reports'][$url] : null;
-            if (!Kiyoh_Mobile_Health::should_send($report, $digest, $now)) {
+            if (!Kiyoh_Mobile_Health::should_send($report, $digest, $now, $send_context)) {
                 continue;
             }
 
@@ -268,14 +315,30 @@ class Kiyoh_Mobile_Health_Reporter {
                 $now,
                 $result['status'],
                 $result['retry_after'],
-                $result['body']
+                $result['body'],
+                $credentials_hash
             );
+            $send_context['last_publish_attempt_at'] = isset($state['publish']['last_attempt_at'])
+                ? (int) $state['publish']['last_attempt_at']
+                : $now;
             $changed = true;
         }
 
         if ($changed) {
             $this->save_state($state);
         }
+    }
+
+    /**
+     * @return bool
+     */
+    public function mobile_credentials_rejected() {
+        $settings = $this->settings();
+        if (!Kiyoh_Mobile_Health::has_credentials($settings)) {
+            return false;
+        }
+
+        return Kiyoh_Mobile_Health::credentials_rejected_for_settings($this->load_state(), $settings, time());
     }
 
     /**

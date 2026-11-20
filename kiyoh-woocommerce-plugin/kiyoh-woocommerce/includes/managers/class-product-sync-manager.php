@@ -781,21 +781,32 @@ class Kiyoh_Product_Sync_Manager {
             'has_more' => count($products) === $per_page
         );
 
-        foreach ($products as $product_id) {
-            if (!$this->should_sync_product($product_id)) {
-                $results['batch_skipped']++;
-                continue;
-            }
+        $health_reporter = class_exists('Kiyoh_Mobile_Health_Reporter') ? Kiyoh_Mobile_Health_Reporter::instance() : null;
+        if ($health_reporter) {
+            $health_reporter->begin_product_sync_job();
+        }
 
-            $success = $this->sync_single_product($product_id);
-            if ($success) {
-                $results['batch_synced']++;
-            } else {
-                $results['batch_errors']++;
-            }
+        try {
+            foreach ($products as $product_id) {
+                if (!$this->should_sync_product($product_id)) {
+                    $results['batch_skipped']++;
+                    continue;
+                }
 
-            // Small delay between products
-            usleep(500000); // 0.5 seconds
+                $success = $this->sync_single_product($product_id);
+                if ($success) {
+                    $results['batch_synced']++;
+                } else {
+                    $results['batch_errors']++;
+                }
+
+                // Small delay between products
+                usleep(500000); // 0.5 seconds
+            }
+        } finally {
+            if ($health_reporter) {
+                $health_reporter->end_product_sync_job();
+            }
         }
 
         wp_send_json_success($results);
