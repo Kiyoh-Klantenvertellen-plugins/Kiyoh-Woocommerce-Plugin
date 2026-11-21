@@ -261,8 +261,9 @@ expect_false(
     '401 stops sends until credentials change'
 );
 $auth_fail = Kiyoh_Mobile_Health::clear_credentials_rejection($auth_fail);
+$after_auth_backoff = $now + 25 + Kiyoh_Mobile_Health::BACKOFF_MAX_SECONDS + 1;
 expect_true(
-    Kiyoh_Mobile_Health::should_send($auth_fail['reports'][$production], 'new-digest', $now + 30),
+    Kiyoh_Mobile_Health::should_send($auth_fail['reports'][$production], 'new-digest', $after_auth_backoff),
     'clearing rejection allows a send again'
 );
 
