@@ -3,7 +3,7 @@
   "phpVersion": "8.2",
   "testsEnvironment": false,
   "plugins": [
-    "https://downloads.wordpress.org/plugin/woocommerce.11.2.1.zip",
+    "https://downloads.wordpress.org/plugin/woocommerce.11.3.0.zip",
     "./kiyoh-woocommerce-plugin/kiyoh-woocommerce"
   ],
   "config": {

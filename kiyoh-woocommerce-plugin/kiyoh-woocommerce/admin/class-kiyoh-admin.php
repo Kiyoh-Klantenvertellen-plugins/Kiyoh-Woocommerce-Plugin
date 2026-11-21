@@ -867,6 +867,48 @@ class Kiyoh_Admin {
     }
 
     /**
+     * Immediate invites that errored or could not be retried.
+     */
+    public function render_invitation_errors() {
+        if (!current_user_can('manage_woocommerce') || !class_exists('Kiyoh_Invitation_Manager')) {
+            return;
+        }
+
+        $rows = Kiyoh_Invitation_Manager::get_recent_invitation_errors(25);
+        $mail_limit = Kiyoh_Invitation_Manager::has_recent_mail_limit_errors(7);
+
+        if ($mail_limit) {
+            echo '<div class="notice notice-warning inline"><p>';
+            echo esc_html(Kiyoh_Invitation_Errors::merchant_message('MAIL_LIMIT_EXCEED'));
+            echo '</p></div>';
+        }
+
+        if (empty($rows)) {
+            return;
+        }
+
+        echo '<h3>' . esc_html__('Recent invitation errors', 'kiyoh-woocommerce') . '</h3>';
+        echo '<p class="description">' . esc_html__('Retryable errors are resent automatically up to three times. Permanent errors are not retried.', 'kiyoh-woocommerce') . '</p>';
+        echo '<table class="widefat striped kiyoh-invitation-errors"><thead><tr>';
+        echo '<th>' . esc_html__('Order', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Customer', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Status', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Detail', 'kiyoh-woocommerce') . '</th>';
+        echo '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            echo '<tr>';
+            echo '<td>' . $this->scheduled_invitation_order_link($row) . '</td>';
+            echo '<td>' . esc_html($row->customer_email) . '</td>';
+            echo '<td>' . esc_html($this->scheduled_invitation_status_label($row->status)) . '</td>';
+            echo '<td>' . esc_html($this->scheduled_invitation_detail($row)) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    /**
      * @param object $row Invitation row.
      * @return string
      */
@@ -914,6 +956,7 @@ class Kiyoh_Admin {
             'sending' => __('Sending', 'kiyoh-woocommerce'),
             'sent' => __('Sent', 'kiyoh-woocommerce'),
             'error' => __('Error', 'kiyoh-woocommerce'),
+            'failed_final' => __('Failed permanently', 'kiyoh-woocommerce'),
             'skipped' => __('Skipped', 'kiyoh-woocommerce'),
         );
 
@@ -930,6 +973,20 @@ class Kiyoh_Admin {
             $parsed = json_decode($row->response_data, true);
             if (is_array($parsed)) {
                 $decoded = $parsed;
+            }
+        }
+
+        if (!empty($decoded['error_code'])) {
+            $merchant = Kiyoh_Invitation_Errors::merchant_message($decoded['error_code']);
+            if ($merchant !== '') {
+                return $merchant;
+            }
+        }
+
+        if (!empty($row->error_code)) {
+            $merchant = Kiyoh_Invitation_Errors::merchant_message($row->error_code);
+            if ($merchant !== '') {
+                return $merchant;
             }
         }
 

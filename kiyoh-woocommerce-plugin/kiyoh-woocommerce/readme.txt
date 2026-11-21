@@ -4,11 +4,11 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.4.3
+Stable tag: 1.4.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
-WC tested up to: 11.2.1
+WC tested up to: 11.3
 
 Sync products, send review invitations, and show Kiyoh or Klantenvertellen ratings in WooCommerce.
 
@@ -36,6 +36,12 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 * Deactivate keeps that data and stops scheduled jobs. Delete removes options, tables, cron, and transients, and revokes the shop at Kiyoh-Connect.
 
 == Changelog ==
+
+= 1.4.5 =
+* Kiyoh Mobile health posts identify the plugin via User-Agent. HTTP 401/403 pause health publishes for 24 hours and clear that pause when credentials change or Connect saves again.
+* Failed immediate invitations are retried by cron (max 3 attempts) unless Kiyoh returns a permanent error such as MAIL_LIMIT_EXCEED.
+* MAIL_LIMIT_EXCEED shows a clear notice and log message on the Invitations tab.
+* Tested with WooCommerce 11.3.
 
 = 1.4.3 =
 * Kiyoh Mobile health backs off on failed posts (credential rejection on 401/403, exponential backoff on other errors) and coalesces sends with a 10-minute minimum between opportunistic posts.

@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.4.5
+
+### Fixed
+- **Kiyoh Mobile health (KP-169)** sends `User-Agent: Kiyoh-WooCommerce/{version}` on health posts. HTTP 401 and 403 still use a 24-hour publish backoff and drop that backoff when credentials change or Kiyoh-Connect saves again. HTTP 429 behaviour is unchanged.
+- **Invitation retries (KP-137)** — the hourly cron re-sends immediate invites that failed with a temporary Kiyoh or network error, up to three attempts with backoff, then marks them `failed_final`. Permanent API codes are not retried.
+- **MAIL_LIMIT_EXCEED (KP-175)** — merchants see a clear notice on the Invitations tab and in the recent invitation error log when Kiyoh rejects invites because the account mail limit was reached. Dutch and English strings are in the plugin language files.
+
+### Changed
+- **WooCommerce 11.3 (KP-121)** — compatibility headers and `readme.txt` now list `WC tested up to: 11.3` after smoke checks with WooCommerce 11.3 in wp-env.
+
 ## v1.4.3
 
 ### Fixed

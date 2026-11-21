@@ -56,7 +56,7 @@ class Kiyoh_Plugin {
         if (defined('KIYOH_WOOCOMMERCE_VERSION')) {
             $this->version = KIYOH_WOOCOMMERCE_VERSION;
         } else {
-            $this->version = '1.4.3';
+            $this->version = '1.4.5';
         }
         $this->plugin_name = 'kiyoh-woocommerce';
 
@@ -102,6 +102,7 @@ class Kiyoh_Plugin {
          */
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-product-sync-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-schedule.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-invitation-errors.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-db.php';
@@ -202,6 +203,7 @@ class Kiyoh_Plugin {
         }
 
         $this->invitation_manager->process_due_scheduled_invitations();
+        $this->invitation_manager->process_errored_invitations();
     }
 
     /**
