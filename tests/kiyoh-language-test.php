@@ -45,7 +45,7 @@ class Kiyoh_Test_Order {
 }
 
 expect_same('fr', Kiyoh_Language::map_wordpress_locale_to_kiyoh_language('fr_FR', 'en'), 'French locale maps to fr');
-expect_same('en', Kiyoh_Language::map_order_language_to_kiyoh('fr', 'en'), 'WPML slug fr maps to fr');
+expect_same('fr', Kiyoh_Language::map_order_language_to_kiyoh('fr', 'en'), 'WPML slug fr maps to fr');
 expect_same('nl', Kiyoh_Language::map_order_language_to_kiyoh('nl', 'en'), 'Polylang slug nl maps to nl');
 
 $order = new Kiyoh_Test_Order(array('wpml_language' => 'fr'));
