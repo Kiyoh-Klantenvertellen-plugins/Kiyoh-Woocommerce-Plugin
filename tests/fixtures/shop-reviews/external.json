@@ -1,0 +1,23 @@
+{
+  "locationId": "OID-TEST",
+  "averageRating": 8.6,
+  "numberReviews": 142,
+  "reviews": [
+    {
+      "reviewId": 9001,
+      "reviewAuthor": "Marie",
+      "rating": 9,
+      "oneliner": "Great service",
+      "description": "Fast delivery and friendly support.",
+      "dateSince": "2026-10-01T10:00:00.000Z"
+    },
+    {
+      "reviewId": 9002,
+      "reviewAuthor": "Jan",
+      "rating": 8,
+      "oneliner": "Top shop",
+      "description": "",
+      "dateSince": "2026-09-15T08:30:00.000Z"
+    }
+  ]
+}

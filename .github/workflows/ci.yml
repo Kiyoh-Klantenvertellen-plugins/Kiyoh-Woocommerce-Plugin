@@ -1,0 +1,27 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        php: ['7.4', '8.2']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+      - name: Lint PHP
+        run: |
+          find kiyoh-woocommerce-plugin/kiyoh-woocommerce -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Unit tests
+        run: |
+          for test in tests/*.php; do
+            php "$test"
+          done

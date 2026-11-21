@@ -204,6 +204,59 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         $response = $this->make_request('GET', $url);
         return new Kiyoh_Api_Response($response);
     }
+
+    /**
+     * Shop (location) reviews and aggregates from the Review Publishing API.
+     *
+     * @see https://ekomi01.atlassian.net/wiki/spaces/KB/pages/3130327053/KV+Kiyoh+Publishing+API
+     *
+     * @param array $query_params limit, orderBy, sortOrder, updatedSince, locale, etc.
+     */
+    public function get_shop_reviews($query_params = array()) {
+        $endpoint = '/v1/publication/review/external';
+
+        $params = array(
+            'locationId' => $this->location_id,
+            'tenantId' => $this->get_tenant_id(),
+        );
+
+        if (!empty($query_params['limit'])) {
+            $params['limit'] = (int) $query_params['limit'];
+        }
+
+        if (!empty($query_params['order_by'])) {
+            $params['orderBy'] = $query_params['order_by'];
+        }
+
+        if (!empty($query_params['sort_order'])) {
+            $params['sortOrder'] = $query_params['sort_order'];
+        }
+
+        if (!empty($query_params['updated_since'])) {
+            $params['updatedSince'] = $query_params['updated_since'];
+        }
+
+        if (!empty($query_params['locale'])) {
+            $params['locale'] = $query_params['locale'];
+        }
+
+        $url = $endpoint . '?' . http_build_query($params);
+        $response = $this->make_request('GET', $url);
+
+        return new Kiyoh_Api_Response($response);
+    }
+
+    private function get_tenant_id() {
+        $account = get_option('kiyoh_connect_account', array());
+        if (is_array($account) && !empty($account['tenant_id'])) {
+            $tenant = (int) $account['tenant_id'];
+            if ($tenant === 98 || $tenant === 99) {
+                return $tenant;
+            }
+        }
+
+        return $this->platform === 'klantenvertellen' ? 99 : 98;
+    }
     
     private function make_request($method, $endpoint, $data = null) {
         $url = $this->base_url . $endpoint;
@@ -305,7 +358,7 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
             return 30;
         }
 
-        if (strpos($endpoint, '/publication/product') !== false) {
+        if (strpos($endpoint, '/publication/product') !== false || strpos($endpoint, '/publication/review/external') !== false) {
             return 30;
         }
         

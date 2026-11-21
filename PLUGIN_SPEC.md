@@ -1,7 +1,7 @@
 # PLUGIN_SPEC — Kiyoh WooCommerce
 
 **Shape:** A + B (WordPress/WooCommerce plugin and Kiyoh / Kiyoh-Connect / Kiyoh Mobile connector)
-**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.2
+**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.6
 
 ## Host
 - Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.2.1). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.
@@ -13,7 +13,7 @@
 - Sample payloads: `tests/fixtures/kiyoh-connect/`.
 
 ## External API
-- Kiyoh / Klantenvertellen publication and invite API: `https://www.kiyoh.com` or `https://www.klantenvertellen.nl`. Header `X-Publication-Api-Token`, location id in the body or query. Overridable with `kiyoh_api_base_url` for a mock only.
+- Kiyoh / Klantenvertellen publication and invite API: `https://www.kiyoh.com` or `https://www.klantenvertellen.nl`. Header `X-Publication-Api-Token`, location id in the body or query. Overridable with `kiyoh_api_base_url` for a mock only. Location (shop) reviews use `GET /v1/publication/review/external` with `locationId` and `tenantId` (98 or 99); results are cached in transients when the merchant enables shop review display.
 - Kiyoh-Connect 1.2.0 (KVMicroServices/Kiyoh-Connect PR #1). Self-hosted client `kiyoh-woocommerce` is public. There is no HMAC key and no client secret.
   - Issuers: `https://connect.kiyoh.com` (tenant 98), `https://connect.klantenvertellen.nl` (tenant 99).
   - Scope `integration:connect`. PKCE S256 plus `state`.

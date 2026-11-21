@@ -379,7 +379,7 @@ class Kiyoh_Admin {
             array(
                 'name' => 'kiyoh_woocommerce_settings[invitations][language_auto]',
                 'value' => $this->get_option('invitations', 'language_auto', true),
-                'description' => __('Automatically detect customer language from WordPress locale', 'kiyoh-woocommerce')
+                'description' => __('When enabled, invitations use the order language (WPML wpml_language or Polylang) when present, then the logged-in customer locale, then the current request locale, then the site default. When disabled, only the fallback language below is sent.', 'kiyoh-woocommerce')
             )
         );
 
@@ -612,6 +612,22 @@ class Kiyoh_Admin {
             $sanitized['ratings'] = array(
                 'enabled' => ($source !== 'woocommerce'),
                 'source' => $source
+            );
+        }
+
+        if (isset($input['frontend'])) {
+            $cache_ttl = isset($input['frontend']['cache_ttl']) ? absint($input['frontend']['cache_ttl']) : 3600;
+            if ($cache_ttl < 300) {
+                $cache_ttl = 300;
+            }
+            if ($cache_ttl > DAY_IN_SECONDS) {
+                $cache_ttl = DAY_IN_SECONDS;
+            }
+
+            $sanitized['frontend'] = array(
+                'shop_reviews_enabled' => !empty($input['frontend']['shop_reviews_enabled']),
+                'shop_reviews_limit' => max(1, min(50, absint($input['frontend']['shop_reviews_limit'] ?? 5))),
+                'cache_ttl' => $cache_ttl,
             );
         }
 

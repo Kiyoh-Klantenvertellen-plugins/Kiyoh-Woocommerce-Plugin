@@ -184,9 +184,10 @@ class Kiyoh_Activator {
                 'fallback_language' => 'en'
             ),
             'frontend' => array(
-                'shop_widget_enabled' => true,
-                'product_widget_enabled' => true,
+                'shop_reviews_enabled' => false,
+                'shop_reviews_limit' => 5,
                 'cache_ttl' => 3600,
+                'product_widget_enabled' => true,
                 'template' => 'default',
                 'items_per_page' => 10,
                 'show_aggregates' => true,
