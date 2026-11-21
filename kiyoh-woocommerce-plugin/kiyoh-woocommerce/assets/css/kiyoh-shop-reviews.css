@@ -1,0 +1,63 @@
+.kiyoh-shop-reviews {
+    margin: 1.5em 0;
+    padding: 0;
+    border: 0;
+    font: inherit;
+    color: inherit;
+}
+
+.kiyoh-shop-reviews__summary {
+    margin-bottom: 1em;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em 1em;
+}
+
+.kiyoh-shop-reviews__stars {
+    letter-spacing: 0.08em;
+    font-size: 1.15em;
+}
+
+.kiyoh-shop-reviews__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.kiyoh-shop-reviews__item {
+    margin: 0 0 1.25em;
+    padding: 0 0 1.25em;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.kiyoh-shop-reviews__item:last-child {
+    margin-bottom: 0;
+    padding-bottom: 0;
+    border-bottom: 0;
+}
+
+.kiyoh-shop-reviews__item-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.25em 1em;
+}
+
+.kiyoh-shop-reviews__title {
+    margin: 0.35em 0;
+    font-weight: 600;
+}
+
+.kiyoh-shop-reviews__body {
+    margin: 0.35em 0;
+    line-height: 1.5;
+}
+
+.kiyoh-shop-reviews__date {
+    display: block;
+    margin-top: 0.35em;
+    font-size: 0.9em;
+    opacity: 0.75;
+}
