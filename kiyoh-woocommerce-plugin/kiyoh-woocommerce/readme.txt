@@ -8,7 +8,7 @@ Stable tag: 1.4.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
-WC tested up to: 11.2.1
+WC tested up to: 11.3
 
 Sync products, send review invitations, and show Kiyoh or Klantenvertellen ratings in WooCommerce.
 
@@ -40,6 +40,9 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 = 1.4.6 =
 * Shop reviews: optional location review display via shortcode, widget, and block (off by default). Cached Publication API fetch.
 * Invitations: Auto-detect Language reads WPML/Polylang order language first when enabled.
+
+= 1.4.5 =
+* Kiyoh Mobile health User-Agent and 401/403 backoff; cron retry of failed invitations; MAIL_LIMIT_EXCEED notice; tested with WooCommerce 11.3.
 
 = 1.4.3 =
 * Kiyoh Mobile health backs off on failed posts (credential rejection on 401/403, exponential backoff on other errors) and coalesces sends with a 10-minute minimum between opportunistic posts.

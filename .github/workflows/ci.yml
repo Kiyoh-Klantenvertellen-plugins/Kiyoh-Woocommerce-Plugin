@@ -1,27 +1,44 @@
 name: CI
 
 on:
-  pull_request:
   push:
     branches:
       - master
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  test:
+  php:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        php: ['7.4', '8.2']
+        php-version:
+          - '7.4'
+          - '8.2'
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
         with:
-          php-version: ${{ matrix.php }}
-      - name: Lint PHP
+          php-version: ${{ matrix.php-version }}
+          coverage: none
+
+      - name: Lint plugin PHP files
         run: |
-          find kiyoh-woocommerce-plugin/kiyoh-woocommerce -name '*.php' -print0 | xargs -0 -n1 php -l
-      - name: Unit tests
+          set -euo pipefail
+          find kiyoh-woocommerce-plugin/kiyoh-woocommerce -name '*.php' -print0 \
+            | xargs -0 -n1 php -l
+
+      - name: Run unit tests
         run: |
+          set -euo pipefail
           for test in tests/*.php; do
-            php "$test"
+            echo "== ${test} =="
+            php "${test}"
           done

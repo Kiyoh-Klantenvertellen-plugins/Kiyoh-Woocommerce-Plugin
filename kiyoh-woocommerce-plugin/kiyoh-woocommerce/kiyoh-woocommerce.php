@@ -14,7 +14,7 @@
  * Tested up to: 7.1.3
  * Requires PHP: 8.2
  * WC requires at least: 5.0
- * WC tested up to: 11.2.1
+ * WC tested up to: 11.3
  */
 
 // If this file is called directly, abort.
@@ -120,6 +120,9 @@ function kiyoh_woocommerce_init() {
         add_action('admin_notices', 'kiyoh_woocommerce_missing_wc_notice');
         return;
     }
+
+    require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-activator.php';
+    Kiyoh_Activator::maybe_upgrade();
     
     // Load the core plugin class
     require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-plugin.php';

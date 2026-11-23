@@ -591,6 +591,9 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                 if (isset($this) && is_object($this) && method_exists($this, 'render_scheduled_invitations')) {
                     $this->render_scheduled_invitations();
                 }
+                if (isset($this) && is_object($this) && method_exists($this, 'render_invitation_errors')) {
+                    $this->render_invitation_errors();
+                }
                 ?>
             </div>
             

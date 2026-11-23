@@ -100,6 +100,7 @@ class Kiyoh_Mobile_Health_Reporter {
             $now = time();
             $state = $this->load_state();
             $state = Kiyoh_Mobile_Health::clear_credentials_rejection($state);
+            $state = Kiyoh_Mobile_Health::clear_auth_report_blocks($state, $now);
             $state = Kiyoh_Mobile_Health::apply_connection_result($state, true, null, 200, $now);
             $state = $this->with_current_widget($state, true);
             $this->save_state($state);
@@ -364,6 +365,9 @@ class Kiyoh_Mobile_Health_Reporter {
             'headers' => array(
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
+                'User-Agent' => Kiyoh_Mobile_Health::health_user_agent(
+                    defined('KIYOH_WOOCOMMERCE_VERSION') ? KIYOH_WOOCOMMERCE_VERSION : ''
+                ),
                 Kiyoh_Mobile_Health::HEADER_PUBLICATION => $api_token,
                 Kiyoh_Mobile_Health::HEADER_LOCATION => $location_id,
             ),
