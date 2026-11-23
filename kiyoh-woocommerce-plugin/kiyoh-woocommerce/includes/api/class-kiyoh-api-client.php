@@ -161,14 +161,13 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         for ($page = 0; $page < self::PUBLICATION_MAX_PAGES; $page++) {
             $params = $this->build_review_query_params($query_params, $start, self::PUBLICATION_PAGE_LIMIT);
             $url = $endpoint . '?' . http_build_query($params);
-            $response = $this->make_request('GET', $url);
-
-            if (!$response['success']) {
-                return new Kiyoh_Api_Response($response);
+            $page_result = $this->read_publication_page($this->make_request('GET', $url));
+            if (isset($page_result['error'])) {
+                return $page_result['error'];
             }
 
-            $data = isset($response['data']) ? $response['data'] : null;
-            $count = $this->count_publication_page_items($data);
+            $data = $page_result['data'];
+            $count = $page_result['count'];
             if ($count === 0) {
                 break;
             }
@@ -219,12 +218,13 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
                 $response = $this->make_request('GET', $paths[$path_index] . '?' . $query);
             }
 
-            if (!$response['success']) {
-                return new Kiyoh_Api_Response($response);
+            $page_result = $this->read_publication_page($response);
+            if (isset($page_result['error'])) {
+                return $page_result['error'];
             }
 
-            $data = isset($response['data']) ? $response['data'] : null;
-            $count = $this->count_publication_page_items($data);
+            $data = $page_result['data'];
+            $count = $page_result['count'];
             if ($count === 0) {
                 break;
             }
@@ -348,6 +348,97 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         }
     }
     
+    /**
+     * A 2xx body is a page only when it is JSON for a publication document.
+     * Auth errors, HTML, and error documents must not end the loop as "no rows".
+     *
+     * @param array $response make_request result.
+     * @return array{error?:Kiyoh_Api_Response,data?:mixed,count?:int}
+     */
+    private function read_publication_page($response) {
+        if (empty($response['success'])) {
+            return array('error' => new Kiyoh_Api_Response($response));
+        }
+
+        $data = isset($response['data']) ? $response['data'] : null;
+        $rejection = $this->publication_page_rejection($data);
+        if ($rejection !== null) {
+            return array('error' => new Kiyoh_Api_Response(array(
+                'success' => false,
+                'error' => $rejection['error'],
+                'error_code' => $rejection['error_code'],
+                'response_code' => isset($response['response_code']) ? $response['response_code'] : null,
+            )));
+        }
+
+        return array(
+            'data' => $data,
+            'count' => $this->count_publication_page_items($data),
+        );
+    }
+
+    /**
+     * @param mixed $data Decoded 2xx body.
+     * @return array{error:string,error_code:string}|null
+     */
+    private function publication_page_rejection($data) {
+        if (!is_array($data)) {
+            return array(
+                'error' => 'Kiyoh returned a response that was not a review page.',
+                'error_code' => 'invalid_publication_page',
+            );
+        }
+
+        if ($data === array()
+            || array_key_exists('reviews', $data)
+            || array_key_exists('clusters', $data)
+            || isset($data['locationProduct'])
+            || isset($data['averageRating'])
+            || isset($data['numberReviews'])
+            || isset($data['productCode'])
+            || isset($data['clusterId'])
+            || array_is_list($data)) {
+            return null;
+        }
+
+        $error_code = '';
+        if (isset($data['errorCode']) && is_string($data['errorCode']) && $data['errorCode'] !== '') {
+            $error_code = $data['errorCode'];
+        } elseif (!empty($data['detailedError'][0]['errorCode']) && is_string($data['detailedError'][0]['errorCode'])) {
+            $error_code = $data['detailedError'][0]['errorCode'];
+        } elseif (isset($data['error']) && is_string($data['error']) && $data['error'] !== '') {
+            $error_code = $data['error'];
+        }
+
+        $message = '';
+        if (isset($data['message']) && is_string($data['message'])) {
+            $message = $data['message'];
+        }
+
+        $status = 0;
+        if (isset($data['status']) && is_numeric($data['status'])) {
+            $status = (int) $data['status'];
+        }
+
+        $has_error_key = $error_code !== ''
+            || !empty($data['detailedError'])
+            || !empty($data['errors'])
+            || (isset($data['error']) && $data['error'] !== '' && $data['error'] !== array());
+
+        if (!$has_error_key && $message === '' && $status < 400 && (!array_key_exists('success', $data) || $data['success'] !== false)) {
+            return null;
+        }
+
+        if ($message === '') {
+            $message = 'Kiyoh returned an error instead of a review page.';
+        }
+
+        return array(
+            'error' => $message,
+            'error_code' => $error_code !== '' ? $error_code : 'api_error',
+        );
+    }
+
     /**
      * @param array $query_params
      * @param int   $start

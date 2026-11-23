@@ -4,6 +4,7 @@
 
 ### Fixed
 - **Product review and rating sync** now pages through the Kiyoh publication API (`start` / `limit` on each request) instead of importing only the first page. The incremental cursor (`last_sync_utc`) moves forward only after every page succeeds, and it is set to the sync start time so a partial run cannot skip later pages. Incremental overlap is widened to one hour, and a daily WP-Cron job queues a full rating sync as a safety net.
+- **A bad API key or a failed later page fails the rating sync.** HTTP 401/403, a non-JSON body, or an error document is no longer treated as an empty page. The Reviews tab shows an error, `last_sync_utc` in `kiyoh_ratings_sync_state` stays unchanged, and a later successful Sync Ratings Now can import the missed pages. A real empty page still completes successfully.
 
 ## v1.4.2
 

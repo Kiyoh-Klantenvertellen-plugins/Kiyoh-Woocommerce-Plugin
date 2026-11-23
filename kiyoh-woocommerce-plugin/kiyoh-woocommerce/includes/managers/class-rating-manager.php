@@ -450,47 +450,36 @@ class Kiyoh_Rating_Manager {
         $this->imported_product_ids = array();
         $sync_started_utc = gmdate('Y-m-d\TH:i:s.000\Z');
         $updated_since = $full || $since === '' ? self::FULL_SYNC_SINCE : $since;
-        $review_ok = false;
-        $update_ok = false;
 
         // Reviews appear on /review/external immediately. Official averageRating /
         // numberReviews often stay 0 until Kiyoh's aggregates catch up, so we
         // compute from the reviews array when those fields are still empty.
+        // Either fetch failing must stop the sync before last_sync_utc moves.
         $review_query = $full ? array() : array('updated_since' => $updated_since);
         $review_response = $client->get_reviews($review_query);
-        if ($review_response->is_success()) {
-            $review_ok = true;
-            $this->apply_publication_payload($review_response->get_data(), $results);
+        if (!$review_response->is_success()) {
+            return $this->abort_sync_results($results, $review_response);
         }
+        $this->apply_publication_payload($review_response->get_data(), $results);
 
         $update_response = $client->get_updated_products($updated_since);
-        if ($update_response->is_success()) {
-            $update_ok = true;
-            $clusters = $this->extract_clusters($update_response->get_data());
-            foreach ($clusters as $cluster) {
-                $aggregates = $this->extract_aggregates($cluster);
-                if ($aggregates['count'] <= 0 || ($this->is_import_enabled() && empty($cluster['reviews']))) {
-                    $cluster = $this->hydrate_cluster_reviews($client, $cluster);
-                }
-                $this->apply_cluster($cluster, $results);
+        if (!$update_response->is_success()) {
+            return $this->abort_sync_results($results, $update_response);
+        }
+        $clusters = $this->extract_clusters($update_response->get_data());
+        foreach ($clusters as $cluster) {
+            $aggregates = $this->extract_aggregates($cluster);
+            if ($aggregates['count'] <= 0 || ($this->is_import_enabled() && empty($cluster['reviews']))) {
+                $cluster = $this->hydrate_cluster_reviews($client, $cluster);
             }
+            $this->apply_cluster($cluster, $results);
         }
 
         if ($full && $results['updated'] === 0) {
-            $this->sync_ratings_by_catalog_skus($client, $results);
-        }
-
-        if (!$review_ok && !$update_ok && $results['updated'] === 0) {
-            $failed = $review_response->is_success() ? $update_response : $review_response;
-            $results['error'] = $failed->get_error() ? $failed->get_error() : __('Failed to fetch product ratings from Kiyoh.', 'kiyoh-woocommerce');
-            if ($failed->get_error_code()) {
-                $results['error'] .= ' [' . $failed->get_error_code() . ']';
+            if (!$this->sync_ratings_by_catalog_skus($client, $results)) {
+                error_log('Kiyoh Rating Sync: ' . $results['error']);
+                return $results;
             }
-            if ($failed->get_response_code()) {
-                $results['error'] .= ' (HTTP ' . $failed->get_response_code() . ')';
-            }
-            error_log('Kiyoh Rating Sync: ' . $results['error']);
-            return $results;
         }
 
         $this->finalize_imported_reviews();
@@ -590,6 +579,10 @@ class Kiyoh_Rating_Manager {
             if ($job['phase'] === 'hydrate' || $job['phase'] === 'catalog') {
                 $this->process_throttled_queue($job);
                 $this->save_job($job);
+            }
+
+            if ($job['status'] === 'failed') {
+                return $this->get_public_sync_status();
             }
 
             if ($job['phase'] === 'finalizing' && $job['status'] === 'running') {
@@ -692,28 +685,28 @@ class Kiyoh_Rating_Manager {
         $updated_since = $full || empty($job['since']) ? self::FULL_SYNC_SINCE : $job['since'];
         $job['requested_since'] = $updated_since;
 
-        $review_ok = false;
-        $update_ok = false;
         $hydrate_queue = array();
 
         $review_query = $full ? array() : array('updated_since' => $updated_since);
         $review_response = $client->get_reviews($review_query);
-        if ($review_response->is_success()) {
-            $review_ok = true;
-            $this->apply_publication_payload($review_response->get_data(), $results);
+        if (!$review_response->is_success()) {
+            $this->fail_job_fetch($job, $review_response);
+            return;
         }
+        $this->apply_publication_payload($review_response->get_data(), $results);
 
         $update_response = $client->get_updated_products($updated_since);
-        if ($update_response->is_success()) {
-            $update_ok = true;
-            foreach ($this->extract_clusters($update_response->get_data()) as $cluster) {
-                $aggregates = $this->extract_aggregates($cluster);
-                if ($aggregates['count'] <= 0 || ($this->is_import_enabled() && empty($cluster['reviews']))) {
-                    $hydrate_queue[] = $this->cluster_for_queue($cluster);
-                    continue;
-                }
-                $this->apply_cluster($cluster, $results);
+        if (!$update_response->is_success()) {
+            $this->fail_job_fetch($job, $update_response);
+            return;
+        }
+        foreach ($this->extract_clusters($update_response->get_data()) as $cluster) {
+            $aggregates = $this->extract_aggregates($cluster);
+            if ($aggregates['count'] <= 0 || ($this->is_import_enabled() && empty($cluster['reviews']))) {
+                $hydrate_queue[] = $this->cluster_for_queue($cluster);
+                continue;
             }
+            $this->apply_cluster($cluster, $results);
         }
 
         $catalog_queue = array();
@@ -723,20 +716,6 @@ class Kiyoh_Rating_Manager {
                     $catalog_queue[] = $sku;
                 }
             }
-        }
-
-        if (!$review_ok && !$update_ok && $results['updated'] === 0 && empty($hydrate_queue) && empty($catalog_queue)) {
-            $failed = $review_response->is_success() ? $update_response : $review_response;
-            $job['status'] = 'failed';
-            $job['error'] = $failed->get_error() ? $failed->get_error() : __('Failed to fetch product ratings from Kiyoh.', 'kiyoh-woocommerce');
-            if ($failed->get_error_code()) {
-                $job['error'] .= ' [' . $failed->get_error_code() . ']';
-            }
-            if ($failed->get_response_code()) {
-                $job['error'] .= ' (HTTP ' . $failed->get_response_code() . ')';
-            }
-            error_log('Kiyoh Rating Sync: ' . $job['error']);
-            return;
         }
 
         $job['results'] = $results;
@@ -801,7 +780,12 @@ class Kiyoh_Rating_Manager {
 
                 $this->wait_for_product_rate_limit($job);
                 $response = $client->get_reviews(array('product_code' => $sku));
-                if ($response->is_success()) {
+                if (!$response->is_success()) {
+                    if ($this->response_is_auth_failure($response)) {
+                        $this->fail_job_fetch($job, $response);
+                        return;
+                    }
+                } else {
                     $results = $job['results'];
                     $this->apply_publication_payload($response->get_data(), $results);
                     $job['results'] = $results;
@@ -1097,6 +1081,11 @@ class Kiyoh_Rating_Manager {
         return $cluster;
     }
 
+    /**
+     * @param Kiyoh_Api_Client $client
+     * @param array            $results
+     * @return bool False when an auth error must fail the sync.
+     */
     private function sync_ratings_by_catalog_skus($client, &$results) {
         $skus = $this->get_fallback_skus();
         foreach ($skus as $sku) {
@@ -1106,11 +1095,74 @@ class Kiyoh_Rating_Manager {
 
             $response = $client->get_reviews(array('product_code' => $sku));
             if (!$response->is_success()) {
+                if ($this->response_is_auth_failure($response)) {
+                    $results['error'] = $this->publication_fetch_error($response);
+                    return false;
+                }
                 continue;
             }
 
             $this->apply_publication_payload($response->get_data(), $results);
         }
+
+        return true;
+    }
+
+    /**
+     * @param array               $results
+     * @param Kiyoh_Api_Response  $response
+     * @return array
+     */
+    private function abort_sync_results($results, $response) {
+        $results['error'] = $this->publication_fetch_error($response);
+        error_log('Kiyoh Rating Sync: ' . $results['error']);
+        return $results;
+    }
+
+    /**
+     * @param array              $job
+     * @param Kiyoh_Api_Response $response
+     */
+    private function fail_job_fetch(&$job, $response) {
+        $job['status'] = 'failed';
+        $job['error'] = $this->publication_fetch_error($response);
+        $job['updated_at'] = time();
+        error_log('Kiyoh Rating Sync: ' . $job['error']);
+    }
+
+    /**
+     * @param Kiyoh_Api_Response $response
+     * @return bool
+     */
+    private function response_is_auth_failure($response) {
+        $code = (int) $response->get_response_code();
+        return $code === 401 || $code === 403;
+    }
+
+    /**
+     * Text shown on the Reviews tab when a publication fetch fails.
+     *
+     * @param Kiyoh_Api_Response $response
+     * @return string
+     */
+    private function publication_fetch_error($response) {
+        $code = (int) $response->get_response_code();
+        if ($code === 401 || $code === 403) {
+            return sprintf(
+                /* translators: %d: HTTP status code */
+                __('Kiyoh rejected the API key, so the rating sync failed and the previous sync time was kept. Check the API key, then run Sync Ratings Now again. (HTTP %d)', 'kiyoh-woocommerce'),
+                $code
+            );
+        }
+
+        $message = $response->get_error() ? $response->get_error() : __('Failed to fetch product ratings from Kiyoh.', 'kiyoh-woocommerce');
+        if ($response->get_error_code()) {
+            $message .= ' [' . $response->get_error_code() . ']';
+        }
+        if ($code > 0) {
+            $message .= ' (HTTP ' . $code . ')';
+        }
+        return $message;
     }
 
     private function get_fallback_skus() {
