@@ -6,18 +6,44 @@
     {
       "reviewId": 9001,
       "reviewAuthor": "Marie",
-      "rating": 9,
-      "oneliner": "Great service",
-      "description": "Fast delivery and friendly support.",
-      "dateSince": "2026-10-01T10:00:00.000Z"
+      "dateSince": "2026-10-01T10:00:00.000Z",
+      "reviewContent": [
+        {
+          "questionGroup": "DEFAULT_OVERALL",
+          "rating": "9"
+        },
+        {
+          "questionGroup": "DEFAULT_ONELINER",
+          "text": "Great service"
+        },
+        {
+          "questionGroup": "DEFAULT_OPINION",
+          "text": "Fast delivery and friendly support."
+        }
+      ]
     },
     {
       "reviewId": 9002,
       "reviewAuthor": "Jan",
-      "rating": 8,
-      "oneliner": "Top shop",
-      "description": "",
-      "dateSince": "2026-09-15T08:30:00.000Z"
+      "dateSince": "2026-09-15T08:30:00.000Z",
+      "reviewContent": [
+        {
+          "questionGroup": "DEFAULT_OVERALL",
+          "rating": "8"
+        },
+        {
+          "questionGroup": "DEFAULT_ONELINER",
+          "rating": "Top shop"
+        }
+      ]
+    },
+    {
+      "reviewId": 9003,
+      "reviewAuthor": "Legacy",
+      "rating": 7,
+      "oneliner": "Plain fields still work",
+      "description": "Backward-compatible API shape.",
+      "dateSince": "2026-08-01T12:00:00.000Z"
     }
   ]
 }

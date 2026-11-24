@@ -98,10 +98,25 @@ $bundle = $manager->normalize_publication_payload($fixture, 5);
 
 expect_same(8.6, $bundle['average'], 'average rating is parsed');
 expect_same(142, $bundle['count'], 'review count is parsed');
-expect_same(2, count($bundle['reviews']), 'reviews are normalized');
+expect_same(3, count($bundle['reviews']), 'reviews are normalized');
 expect_same('Marie', $bundle['reviews'][0]['author'], 'first review author');
-expect_same(9.0, $bundle['reviews'][0]['rating'], 'first review rating');
-expect_same('Great service', $bundle['reviews'][0]['title'], 'first review oneliner');
+expect_same(9.0, $bundle['reviews'][0]['rating'], 'first review rating from reviewContent');
+expect_same('Great service', $bundle['reviews'][0]['title'], 'first review oneliner from reviewContent');
+expect_same('Fast delivery and friendly support.', $bundle['reviews'][0]['body'], 'first review opinion from reviewContent');
+expect_same('Top shop', $bundle['reviews'][1]['title'], 'oneliner may use string rating field');
+expect_same('', $bundle['reviews'][1]['body'], 'missing opinion stays empty');
+expect_same('Plain fields still work', $bundle['reviews'][2]['title'], 'legacy oneliner field');
+
+expect_same('★★★★☆', Kiyoh_Shop_Reviews_Manager::star_string_for_kiyoh_rating(7.6), '7.6/10 rounds to 4 stars');
+expect_same('★★★½☆', Kiyoh_Shop_Reviews_Manager::star_string_for_kiyoh_rating(7.4), '7.4/10 rounds to 3.5 stars');
+expect_same('★★★½☆', Kiyoh_Shop_Reviews_Manager::star_string_for_kiyoh_rating(7.48), '7.48/10 rounds to 3.5 stars');
+expect_same('★★★★½', Kiyoh_Shop_Reviews_Manager::star_string_for_kiyoh_rating(8.6), 'summary stars use same rounding');
+
+$block_meta = Kiyoh_Shop_Reviews_Manager::block_type_metadata();
+expect_same('Kiyoh shop reviews', $block_meta['title'], 'block has title for inserter');
+expect_same('widgets', $block_meta['category'], 'block has category for inserter');
+expect_true(in_array('kiyoh', $block_meta['keywords'], true), 'block keywords include kiyoh');
+expect_true(in_array('reviews', $block_meta['keywords'], true), 'block keywords include reviews');
 
 if ($failures > 0) {
     fwrite(STDERR, "{$failures} failed\n");

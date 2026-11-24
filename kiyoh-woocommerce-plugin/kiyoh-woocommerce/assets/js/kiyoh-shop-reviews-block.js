@@ -6,6 +6,21 @@
     var registerBlockType = wp.blocks.registerBlockType;
 
     registerBlockType('kiyoh/shop-reviews', {
+        title: __('Kiyoh shop reviews', 'kiyoh-woocommerce'),
+        description: __('Show Kiyoh location reviews from your shop profile.', 'kiyoh-woocommerce'),
+        category: 'widgets',
+        icon: 'star-filled',
+        keywords: [
+            __('kiyoh', 'kiyoh-woocommerce'),
+            __('reviews', 'kiyoh-woocommerce'),
+            __('shop', 'kiyoh-woocommerce'),
+        ],
+        attributes: {
+            limit: {
+                type: 'number',
+                default: 5,
+            },
+        },
         edit: function (props) {
             var limit = props.attributes.limit;
             return el(
