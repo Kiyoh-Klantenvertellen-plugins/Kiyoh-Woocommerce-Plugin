@@ -2,6 +2,9 @@
 
 ## v1.4.6
 
+### Fixed
+- **Shop reviews (KP-174):** Star display rounds the 1–10 score to the nearest half star (e.g. 7.6/10 shows four stars). Review text is read from Publication API `reviewContent` (oneliner/opinion). Gutenberg block registers with title, category, and keywords so it appears in the inserter.
+
 ### Added
 - **Shop reviews (KP-174):** Fetch location reviews from `GET /v1/publication/review/external` with transient caching. Merchants opt in under WooCommerce → Kiyoh → Reviews. Shortcode `[kiyoh_shop_reviews]`, classic widget, and block. Product review sync is unchanged.
 - **WPML / Polylang invites (KP-139):** When **Auto-detect Language** is on, invitations use order language (`wpml_language` or Polylang) before the existing locale chain. When off, only the fallback language is sent.

@@ -6,7 +6,7 @@
 class Kiyoh_Shop_Reviews_Manager {
 
     const TRANSIENT_PREFIX = 'kiyoh_shop_reviews_';
-    const CACHE_VERSION = 1;
+    const CACHE_VERSION = 2;
 
     private $settings;
     private static $stylesheet_enqueued = false;
@@ -43,6 +43,21 @@ class Kiyoh_Shop_Reviews_Manager {
         register_widget('Kiyoh_Shop_Reviews_Widget');
     }
 
+    /**
+     * Block metadata merged into register_block_type (tested without booting the block editor).
+     *
+     * @return array<string, mixed>
+     */
+    public static function block_type_metadata() {
+        return array(
+            'title' => __('Kiyoh shop reviews', 'kiyoh-woocommerce'),
+            'description' => __('Show Kiyoh location reviews from your shop profile.', 'kiyoh-woocommerce'),
+            'category' => 'widgets',
+            'icon' => 'star-filled',
+            'keywords' => array('kiyoh', 'reviews', 'shop', 'rating'),
+        );
+    }
+
     public function register_block() {
         if (!function_exists('register_block_type')) {
             return;
@@ -55,18 +70,6 @@ class Kiyoh_Shop_Reviews_Manager {
             KIYOH_WOOCOMMERCE_VERSION
         );
 
-        register_block_type('kiyoh/shop-reviews', array(
-            'api_version' => 2,
-            'editor_script' => 'kiyoh-shop-reviews-block',
-            'render_callback' => array($this, 'render_block'),
-            'attributes' => array(
-                'limit' => array(
-                    'type' => 'number',
-                    'default' => 5,
-                ),
-            ),
-        ));
-
         wp_register_script(
             'kiyoh-shop-reviews-block',
             KIYOH_WOOCOMMERCE_PLUGIN_URL . 'assets/js/kiyoh-shop-reviews-block.js',
@@ -74,6 +77,22 @@ class Kiyoh_Shop_Reviews_Manager {
             KIYOH_WOOCOMMERCE_VERSION,
             true
         );
+
+        register_block_type('kiyoh/shop-reviews', array_merge(
+            self::block_type_metadata(),
+            array(
+                'api_version' => 2,
+                'editor_script' => 'kiyoh-shop-reviews-block',
+                'style' => 'kiyoh-shop-reviews',
+                'render_callback' => array($this, 'render_block'),
+                'attributes' => array(
+                    'limit' => array(
+                        'type' => 'number',
+                        'default' => 5,
+                    ),
+                ),
+            )
+        ));
     }
 
     /**
@@ -275,6 +294,30 @@ class Kiyoh_Shop_Reviews_Manager {
             $body = trim((string) $review['description']);
         }
 
+        if (!empty($review['reviewContent']) && is_array($review['reviewContent'])) {
+            foreach ($review['reviewContent'] as $content) {
+                if (!is_array($content) || empty($content['questionGroup'])) {
+                    continue;
+                }
+                $group = (string) $content['questionGroup'];
+                if ($group === 'DEFAULT_OVERALL' && $rating === null && isset($content['rating']) && is_numeric($content['rating'])) {
+                    $rating = (float) $content['rating'];
+                }
+                if ($group === 'DEFAULT_ONELINER') {
+                    $text = $this->review_content_text($content);
+                    if ($text !== '') {
+                        $title = $text;
+                    }
+                }
+                if ($group === 'DEFAULT_OPINION') {
+                    $text = $this->review_content_text($content);
+                    if ($text !== '') {
+                        $body = $text;
+                    }
+                }
+            }
+        }
+
         if ($title !== '' && $body === $title) {
             $body = '';
         }
@@ -338,18 +381,48 @@ class Kiyoh_Shop_Reviews_Manager {
     }
 
     /**
+     * Text for a reviewContent / productReviewContent answer row (Kiyoh may use text or a string rating field).
+     *
+     * @param array<string, mixed> $content
+     */
+    private function review_content_text($content) {
+        if (!empty($content['text'])) {
+            return trim((string) $content['text']);
+        }
+        if (!empty($content['answer'])) {
+            return trim((string) $content['answer']);
+        }
+        if (isset($content['rating']) && $content['rating'] !== '' && !is_numeric($content['rating'])) {
+            return trim((string) $content['rating']);
+        }
+
+        return '';
+    }
+
+    /**
+     * Star glyphs for a Kiyoh 1–10 score (WooCommerce stars rounded to the nearest half).
+     *
      * @param float $kiyoh_rating 1-10 scale
      */
-    private function star_string($kiyoh_rating) {
+    public static function star_string_for_kiyoh_rating($kiyoh_rating) {
         $wc = class_exists('Kiyoh_Rating_Manager')
             ? Kiyoh_Rating_Manager::to_woocommerce_rating($kiyoh_rating)
-            : min(5, max(0, $kiyoh_rating / 2));
+            : min(5, max(0, (float) $kiyoh_rating / 2));
+
+        $wc = round($wc * 2) / 2;
 
         $full = (int) floor($wc);
         $half = ($wc - $full) >= 0.5 ? 1 : 0;
         $empty = 5 - $full - $half;
 
         return str_repeat('★', $full) . ($half ? '½' : '') . str_repeat('☆', max(0, $empty));
+    }
+
+    /**
+     * @param float $kiyoh_rating 1-10 scale
+     */
+    private function star_string($kiyoh_rating) {
+        return self::star_string_for_kiyoh_rating($kiyoh_rating);
     }
 
     private function enqueue_styles() {
