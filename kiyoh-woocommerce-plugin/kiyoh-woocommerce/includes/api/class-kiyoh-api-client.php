@@ -478,7 +478,7 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
             || isset($data['numberReviews'])
             || isset($data['productCode'])
             || isset($data['clusterId'])
-            || array_is_list($data)) {
+            || self::is_list_array($data)) {
             return null;
         }
 
@@ -518,6 +518,29 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
             'error' => $message,
             'error_code' => $error_code !== '' ? $error_code : 'api_error',
         );
+    }
+
+    /**
+     * PHP 7.4-compatible list check (array_is_list() is PHP 8.1+).
+     *
+     * @param array $data
+     * @return bool
+     */
+    private static function is_list_array($data) {
+        if (!is_array($data)) {
+            return false;
+        }
+        if (function_exists('array_is_list')) {
+            return array_is_list($data);
+        }
+        $i = 0;
+        foreach ($data as $key => $_) {
+            if ($key !== $i) {
+                return false;
+            }
+            $i++;
+        }
+        return true;
     }
 
     /**
