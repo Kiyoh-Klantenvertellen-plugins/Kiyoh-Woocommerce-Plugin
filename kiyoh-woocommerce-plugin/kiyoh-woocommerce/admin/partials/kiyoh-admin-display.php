@@ -312,6 +312,27 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                     </tr>
                     <tr>
                         <th scope="row">
+                            <label for="shop_reviews_enabled"><?php _e('Shop reviews on your site', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <input type="hidden" name="kiyoh_woocommerce_settings[frontend][_section]" value="1" />
+                            <label>
+                                <input type="checkbox" id="shop_reviews_enabled" name="kiyoh_woocommerce_settings[frontend][shop_reviews_enabled]" value="1" <?php checked(!empty($settings['frontend']['shop_reviews_enabled'])); ?> />
+                                <?php _e('Fetch and show location (shop) reviews', 'kiyoh-woocommerce'); ?>
+                            </label>
+                            <p class="description"><?php _e('Off by default. When enabled, use the shortcode [kiyoh_shop_reviews limit="5"], the Kiyoh shop reviews widget, or the Kiyoh shop reviews block. Product rating sync is unchanged.', 'kiyoh-woocommerce'); ?></p>
+                            <p>
+                                <label for="shop_reviews_limit"><?php _e('Default number of reviews', 'kiyoh-woocommerce'); ?></label>
+                                <input type="number" class="small-text" id="shop_reviews_limit" name="kiyoh_woocommerce_settings[frontend][shop_reviews_limit]" min="1" max="50" value="<?php echo esc_attr(isset($settings['frontend']['shop_reviews_limit']) ? (int) $settings['frontend']['shop_reviews_limit'] : 5); ?>" />
+                            </p>
+                            <p>
+                                <label for="shop_reviews_cache_ttl"><?php _e('Cache TTL (seconds)', 'kiyoh-woocommerce'); ?></label>
+                                <input type="number" class="small-text" id="shop_reviews_cache_ttl" name="kiyoh_woocommerce_settings[frontend][cache_ttl]" min="300" max="<?php echo esc_attr((string) DAY_IN_SECONDS); ?>" value="<?php echo esc_attr(isset($settings['frontend']['cache_ttl']) ? (int) $settings['frontend']['cache_ttl'] : 3600); ?>" />
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
                             <label><?php _e('Sync Product Ratings', 'kiyoh-woocommerce'); ?></label>
                         </th>
                         <td>
@@ -525,7 +546,7 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                         </th>
                         <td>
                             <input type="checkbox" id="language_auto" name="kiyoh_woocommerce_settings[invitations][language_auto]" value="1" <?php checked(!empty($settings['invitations']['language_auto']), true); ?> />
-                            <p class="description"><?php _e('Automatically detect customer language from WordPress locale', 'kiyoh-woocommerce'); ?></p>
+                            <p class="description"><?php esc_html_e('When enabled, invitations use WPML wpml_language or Polylang order language first, then the customer locale, request locale, and site default. When disabled, only the fallback language is used.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
                     
@@ -571,6 +592,9 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                 <?php
                 if (isset($this) && is_object($this) && method_exists($this, 'render_scheduled_invitations')) {
                     $this->render_scheduled_invitations();
+                }
+                if (isset($this) && is_object($this) && method_exists($this, 'render_invitation_errors')) {
+                    $this->render_invitation_errors();
                 }
                 ?>
             </div>

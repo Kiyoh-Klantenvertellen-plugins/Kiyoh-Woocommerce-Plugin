@@ -32,8 +32,9 @@ class Kiyoh_Mobile_Health {
     const MIN_SEND_INTERVAL_SECONDS = 600;
     /** First wait after a transient error (5xx, timeout, other non-auth failures). */
     const BACKOFF_INITIAL_SECONDS = 300;
-    /** Cap for exponential backoff on transient errors. */
+    /** Cap for exponential backoff on transient errors. Also used for HTTP 401/403 auth backoff. */
     const BACKOFF_MAX_SECONDS = 86400;
+    const AUTH_BACKOFF_SECONDS = 86400;
 
     /**
      * @return array
@@ -722,6 +723,9 @@ class Kiyoh_Mobile_Health {
             if (!is_array($report) || empty($report['blocked_until'])) {
                 continue;
             }
+            if (!empty($report['auth_backoff'])) {
+                continue;
+            }
             if ((int) $report['blocked_until'] > (int) $now) {
                 $blocked[$url] = array(
                     'digest' => '',
@@ -733,6 +737,36 @@ class Kiyoh_Mobile_Health {
         $state['reports'] = $blocked;
 
         return $state;
+    }
+
+    /**
+     * @param array $state
+     * @param int   $now
+     * @return array
+     */
+    public static function clear_auth_report_blocks($state, $now) {
+        $state = self::normalize_state($state, $now);
+        foreach ($state['reports'] as $url => $report) {
+            if (!is_array($report) || empty($report['auth_backoff'])) {
+                continue;
+            }
+            unset($state['reports'][$url]);
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param mixed $version
+     * @return string
+     */
+    public static function health_user_agent($version) {
+        $version = self::normalize_plugin_version($version);
+        if ($version === '') {
+            return 'Kiyoh-WooCommerce';
+        }
+
+        return 'Kiyoh-WooCommerce/' . $version;
     }
 
     /**
@@ -937,6 +971,7 @@ class Kiyoh_Mobile_Health {
             $current['at'] = (int) $now;
             $current['blocked_until'] = 0;
             $current['fail_streak'] = 0;
+            unset($current['auth_backoff']);
             $state['reports'][$url] = $current;
             $state = self::clear_credentials_rejection($state);
             return $state;
@@ -945,6 +980,7 @@ class Kiyoh_Mobile_Health {
         if ($status === 429) {
             $seconds = self::retry_after_seconds($retry_after_header, $body, $now);
             $current['blocked_until'] = (int) $now + $seconds;
+            unset($current['auth_backoff']);
             $state['reports'][$url] = $current;
             return $state;
         }
@@ -956,7 +992,8 @@ class Kiyoh_Mobile_Health {
                 }
                 $state['auth']['rejected_credentials_hash'] = $credentials_hash;
             }
-            $current['blocked_until'] = (int) $now + self::BACKOFF_MAX_SECONDS;
+            $current['blocked_until'] = (int) $now + self::AUTH_BACKOFF_SECONDS;
+            $current['auth_backoff'] = true;
             $state['reports'][$url] = $current;
             return $state;
         }

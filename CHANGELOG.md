@@ -1,5 +1,27 @@
 # Changelog
 
+## v1.4.6
+
+### Fixed
+- **Shop reviews (KP-174):** Star display rounds the 1–10 score to the nearest half star (e.g. 7.6/10 shows four stars). Review text is read from Publication API `reviewContent` (oneliner/opinion). Gutenberg block registers with title, category, and keywords so it appears in the inserter.
+
+### Added
+- **Shop reviews (KP-174):** Fetch location reviews from `GET /v1/publication/review/external` with transient caching. Merchants opt in under WooCommerce → Kiyoh → Reviews. Shortcode `[kiyoh_shop_reviews]`, classic widget, and block. Product review sync is unchanged.
+- **WPML / Polylang invites (KP-139):** When **Auto-detect Language** is on, invitations use order language (`wpml_language` or Polylang) before the existing locale chain. When off, only the fallback language is sent.
+
+### Changed
+- GitHub Actions CI runs `php -l` on PHP 7.4 and 8.2 plus the unit test scripts in `tests/`.
+
+## v1.4.5
+
+### Fixed
+- **Kiyoh Mobile health (KP-169)** sends `User-Agent: Kiyoh-WooCommerce/{version}` on health posts. HTTP 401 and 403 still use a 24-hour publish backoff and drop that backoff when credentials change or Kiyoh-Connect saves again. HTTP 429 behaviour is unchanged.
+- **Invitation retries (KP-137)** — the hourly cron re-sends immediate invites that failed with a temporary Kiyoh or network error, up to three attempts with backoff, then marks them `failed_final`. Permanent API codes are not retried.
+- **MAIL_LIMIT_EXCEED (KP-175)** — merchants see a clear notice on the Invitations tab and in the recent invitation error log when Kiyoh rejects invites because the account mail limit was reached. Dutch and English strings are in the plugin language files.
+
+### Changed
+- **WooCommerce 11.3 (KP-121)** — compatibility headers and `readme.txt` now list `WC tested up to: 11.3` after smoke checks with WooCommerce 11.3 in wp-env.
+
 ## v1.4.4
 
 ### Fixed

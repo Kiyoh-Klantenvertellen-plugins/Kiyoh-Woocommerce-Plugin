@@ -170,12 +170,16 @@ class Kiyoh_Activator {
             scheduled_for datetime DEFAULT NULL,
             status varchar(20) DEFAULT 'pending',
             response_data text,
+            error_code varchar(64) DEFAULT NULL,
+            retry_attempts smallint UNSIGNED DEFAULT 0,
+            retry_at datetime DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY order_id (order_id),
             KEY customer_email (customer_email),
             KEY status (status),
-            KEY scheduled_for (scheduled_for)
+            KEY scheduled_for (scheduled_for),
+            KEY invite_error_retry (status, retry_at)
         ) $charset_collate;";
 
         // Review cache table
@@ -227,9 +231,10 @@ class Kiyoh_Activator {
                 'fallback_language' => 'en'
             ),
             'frontend' => array(
-                'shop_widget_enabled' => true,
-                'product_widget_enabled' => true,
+                'shop_reviews_enabled' => false,
+                'shop_reviews_limit' => 5,
                 'cache_ttl' => 3600,
+                'product_widget_enabled' => true,
                 'template' => 'default',
                 'items_per_page' => 10,
                 'show_aggregates' => true,
@@ -296,5 +301,19 @@ class Kiyoh_Activator {
         if (class_exists('Kiyoh_Invitation_Manager')) {
             Kiyoh_Invitation_Manager::queue_outstanding_schedules();
         }
+    }
+
+    /**
+     * Run dbDelta when the plugin files are newer than the stored version.
+     */
+    public static function maybe_upgrade() {
+        $stored = get_option('kiyoh_woocommerce_version', '');
+        if (is_string($stored) && version_compare($stored, KIYOH_WOOCOMMERCE_VERSION, '>=')) {
+            return;
+        }
+
+        self::create_tables();
+        update_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
+        self::schedule_cron_events();
     }
 }

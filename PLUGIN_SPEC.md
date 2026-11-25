@@ -1,10 +1,10 @@
 # PLUGIN_SPEC — Kiyoh WooCommerce
 
 **Shape:** A + B (WordPress/WooCommerce plugin and Kiyoh / Kiyoh-Connect / Kiyoh Mobile connector)
-**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.4
+**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.6
 
 ## Host
-- Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.2.1). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.
+- Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.3). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.
 - Runtime: PHP 8.2+.
 
 ## Contract
@@ -13,7 +13,7 @@
 - Sample payloads: `tests/fixtures/kiyoh-connect/`.
 
 ## External API
-- Kiyoh / Klantenvertellen publication and invite API: `https://www.kiyoh.com` or `https://www.klantenvertellen.nl`. Header `X-Publication-Api-Token`, location id in the body or query. Overridable with `kiyoh_api_base_url` for a mock only.
+- Kiyoh / Klantenvertellen publication and invite API: `https://www.kiyoh.com` or `https://www.klantenvertellen.nl`. Header `X-Publication-Api-Token`, location id in the body or query. Overridable with `kiyoh_api_base_url` for a mock only. Location (shop) reviews use `GET /v1/publication/review/external` with `locationId` and `tenantId` (98 or 99); results are cached in transients when the merchant enables shop review display.
 - Kiyoh-Connect 1.2.0 (KVMicroServices/Kiyoh-Connect PR #1). Self-hosted client `kiyoh-woocommerce` is public. There is no HMAC key and no client secret.
   - Issuers: `https://connect.kiyoh.com` (tenant 98), `https://connect.klantenvertellen.nl` (tenant 99).
   - Scope `integration:connect`. PKCE S256 plus `state`.
@@ -27,14 +27,14 @@
   - Refresh form: `grant_type=refresh_token`, `refresh_token`, `client_id`, `shop_id`, `shop_secret`. A new refresh token replaces the stored one.
   - `POST {issuer}/revoke` form: `token`, `client_id`, `shop_id`, `shop_secret`.
   - `POST {issuer}/shops/revoke` JSON: `client_id`, `shop_id`, `shop_secret`. Disconnect and uninstall both send this after the token revoke. If the shop secret cannot be decrypted, the remote revoke is skipped and local data is still deleted.
-- Kiyoh Mobile health: default `https://kiyoh-mobile.com` only. Testers override with `KIYOH_MOBILE_URLS` (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter (filter wins). No merchant-facing URL field. `POST /api/integrations/health`. Body includes `webhooks.lastReceivedAt` (null; this plugin has no webhook receiver).
+- Kiyoh Mobile health: default `https://kiyoh-mobile.com` only. Testers override with `KIYOH_MOBILE_URLS` (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter (filter wins). No merchant-facing URL field. `POST /api/integrations/health` with `User-Agent: Kiyoh-WooCommerce/{version}`. HTTP 401/403 pause publishes for 24 hours and clear that pause when credentials change or Connect saves again. Body includes `webhooks.lastReceivedAt` (null; this plugin has no webhook receiver).
 - Auth: Connect is OAuth 2.1 authorization code + PKCE with a per-shop secret. The publication API uses the invite key from Connect, or a manually pasted key.
 - Rate limits: Connect and Mobile 429 honour `Retry-After`, else `retryAfterSeconds`. Interactive Connect calls stop after 3 attempts or when the wait is over 8 seconds. Backoff cap is 60 seconds. A register 429 tells the merchant to wait. Publication calls are not given a 5-attempt hang inside checkout.
 - Webhooks: none. This plugin does not receive webhooks.
 
 ## Behaviour
 - Trigger: merchant clicks Connect (popup). Registration runs only when this issuer and return address have no reusable shop secret. After the callback, the popup tells the settings tab and closes; the tab reloads Connected. With no opener, the popup window opens the settings page. Daily health cron, plus health on Connect credential save, settings save, invite, and product sync. Invites on order status.
-- Failure policy: Connect errors stay on the settings screen. An active secret is saved before the popup, because Connect shows it once. A pending secret is saved only after the token call succeeds. A publication 401 refreshes Connect once when the shop is connected, then retries that call once. Manual keys are not overwritten by a refresh. Health failures never stop checkout or invites.
+- Failure policy: Connect errors stay on the settings screen. An active secret is saved before the popup, because Connect shows it once. A pending secret is saved only after the token call succeeds. A publication 401 refreshes Connect once when the shop is connected, then retries that call once. Manual keys are not overwritten by a refresh. Health failures never stop checkout or invites. Immediate invites that fail with a retryable error are retried on the hourly `kiyoh_process_scheduled_invitations` cron (max 3 attempts). Permanent codes such as `MAIL_LIMIT_EXCEED` are not retried.
 - Idempotency: the same return address reuses `shop_id` and `shop_secret` and does not call register. The OAuth `state` transient is single-use and lasts 15 minutes. Location id and invite key are written only after both the token and the credentials call succeed. A second callback with the same state does not write again. Switching the platform (Kiyoh vs Klantenvertellen) does not reuse the other issuer's secret.
 
 ## Permissions requested (and why)
@@ -45,7 +45,7 @@
 - Option `kiyoh_woocommerce_settings`: enabled, platform, location id, API key, credential source (`connect` or `manual`), product sync, invitations, ratings. Legacy `general.mobile_urls` may exist until upgrade strips values that pointed at staging.
 - Option `kiyoh_connect_account` (schema 2, autoload off): issuer, shop origin, redirect URI, location name, tenant id, shop status, and `shop_id`, `shop_secret`, refresh token, and access token encrypted with AES-256-GCM. The key is `hash('sha256', wp_salt('auth'), true)`. Plaintext secrets are not stored.
 - Option `kiyoh_mobile_health`: last report digest and 429 block. Options `kiyoh_woocommerce_version`, `kiyoh_ratings_sync_state`, `kiyoh_ratings_sync_job`.
-- Tables `{prefix}kiyoh_product_sync`, `{prefix}kiyoh_invitations`, `{prefix}kiyoh_review_cache`.
+- Tables `{prefix}kiyoh_product_sync`, `{prefix}kiyoh_invitations` (`error_code`, `retry_attempts`, `retry_at`, statuses `error` and `failed_final`), `{prefix}kiyoh_review_cache`.
 - Transients whose names start with `kiyoh_`, including the 15-minute OAuth state (encrypted verifier, shop id, and shop secret, plus whether the secret must be promoted).
 - Cron: `kiyoh_process_scheduled_invitations`, `kiyoh_cleanup_cache`, `kiyoh_sync_product_ratings`, `kiyoh_process_rating_sync`, `kiyoh_report_mobile_health`, `kiyoh_send_scheduled_invitation`.
 - Deactivate clears cron and the review cache only. Settings, Connect tokens, the shop secret, invitations, and product-sync rows stay.

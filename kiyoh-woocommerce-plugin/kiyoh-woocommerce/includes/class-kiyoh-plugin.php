@@ -50,13 +50,18 @@ class Kiyoh_Plugin {
     protected $rating_manager;
 
     /**
+     * @var Kiyoh_Shop_Reviews_Manager|null
+     */
+    protected $shop_reviews_manager;
+
+    /**
      * Define the core functionality of the plugin.
      */
     public function __construct() {
         if (defined('KIYOH_WOOCOMMERCE_VERSION')) {
             $this->version = KIYOH_WOOCOMMERCE_VERSION;
         } else {
-            $this->version = '1.4.4';
+            $this->version = '1.4.6';
         }
         $this->plugin_name = 'kiyoh-woocommerce';
 
@@ -102,8 +107,11 @@ class Kiyoh_Plugin {
          */
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-product-sync-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-schedule.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-invitation-errors.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-invitation-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-rating-manager.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/helpers/class-kiyoh-language.php';
+        require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/managers/class-shop-reviews-manager.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-db.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health.php';
         require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health-reporter.php';
@@ -158,6 +166,7 @@ class Kiyoh_Plugin {
             $this->product_sync_manager = new Kiyoh_Product_Sync_Manager();
             $this->invitation_manager = new Kiyoh_Invitation_Manager();
             $this->rating_manager = new Kiyoh_Rating_Manager();
+            $this->shop_reviews_manager = new Kiyoh_Shop_Reviews_Manager();
         }
     }
 
@@ -202,6 +211,7 @@ class Kiyoh_Plugin {
         }
 
         $this->invitation_manager->process_due_scheduled_invitations();
+        $this->invitation_manager->process_errored_invitations();
     }
 
     /**
