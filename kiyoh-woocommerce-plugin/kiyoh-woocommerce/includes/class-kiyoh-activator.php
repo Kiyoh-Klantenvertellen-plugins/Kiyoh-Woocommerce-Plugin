@@ -28,7 +28,9 @@ class Kiyoh_Activator {
             self::upgrade_1_4_4_remove_staging_mobile_urls();
         }
 
+        self::create_tables();
         update_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
+        self::schedule_cron_events();
     }
 
     /**
@@ -301,19 +303,5 @@ class Kiyoh_Activator {
         if (class_exists('Kiyoh_Invitation_Manager')) {
             Kiyoh_Invitation_Manager::queue_outstanding_schedules();
         }
-    }
-
-    /**
-     * Run dbDelta when the plugin files are newer than the stored version.
-     */
-    public static function maybe_upgrade() {
-        $stored = get_option('kiyoh_woocommerce_version', '');
-        if (is_string($stored) && version_compare($stored, KIYOH_WOOCOMMERCE_VERSION, '>=')) {
-            return;
-        }
-
-        self::create_tables();
-        update_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
-        self::schedule_cron_events();
     }
 }
