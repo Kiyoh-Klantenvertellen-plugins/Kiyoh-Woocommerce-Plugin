@@ -1,7 +1,7 @@
 # PLUGIN_SPEC — Kiyoh WooCommerce
 
 **Shape:** A + B (WordPress/WooCommerce plugin and Kiyoh / Kiyoh-Connect / Kiyoh Mobile connector)
-**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.2
+**Owner:** Kiyoh plugins (KP-58, KP-86)   **Version:** 1.4.3
 
 ## Host
 - Platform + supported versions: WordPress 5.8+ (tested to 7.1.3), WooCommerce 5.0+ (tested to 11.2.1). High-Performance Order Storage and Cart/Checkout blocks are declared compatible.

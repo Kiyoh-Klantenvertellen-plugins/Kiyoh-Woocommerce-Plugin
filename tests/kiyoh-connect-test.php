@@ -11,6 +11,9 @@ if (!defined('ABSPATH')) {
 }
 
 require_once __DIR__ . '/../kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/class-kiyoh-connect.php';
+require_once __DIR__ . '/../kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/api/interface-kiyoh-api.php';
+require_once __DIR__ . '/../kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/api/class-kiyoh-api-client.php';
+require_once __DIR__ . '/../kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/managers/class-rating-manager.php';
 
 $failures = 0;
 
@@ -46,6 +49,9 @@ expect_same('klantenvertellen', Kiyoh_Connect::platform_for_tenant(99), 'tenant 
 expect_same($origin, Kiyoh_Connect::shop_origin('https://Shop.Example/store'), 'shop origin is scheme and host, lowercased, without a path');
 expect_same('https://shop.example:8443', Kiyoh_Connect::shop_origin('https://shop.example:8443/shop'), 'a non-default port stays on the origin');
 expect_same('', Kiyoh_Connect::shop_origin('http://shop.example'), 'http is not a Connect origin');
+expect_same('http', Kiyoh_Connect::connect_block_reason('http://shop.example'), 'an http shop is blocked before Connect redirects');
+expect_same('', Kiyoh_Connect::connect_block_reason($origin), 'https is not an http block');
+expect_same('Kiyoh-Connect needs an HTTPS shop address. This shop is using HTTP, so Connect cannot return here. Use the Location ID and API key fields, or serve the shop over HTTPS.', Kiyoh_Connect::validation_message('http'), 'http has the HTTPS required message');
 expect_same($callback, Kiyoh_Connect::callback_url($origin), 'the return address is the REST callback on the shop host');
 
 $body = Kiyoh_Connect::register_body($origin, $callback);
@@ -220,6 +226,31 @@ expect_true(strpos($admin_js, 'event.source !== KiyohAdmin.connectPopup') !== fa
 expect_true(strpos($admin_js, "event.source.postMessage({ source: 'kiyoh-connect-ack' }, event.origin)") !== false, 'the ack is sent to the callback origin only');
 expect_true(strpos($admin_js, 'connectPopup.close()') !== false, 'the settings tab closes the popup');
 expect_true(strpos($admin_js, 'kiyoh_connect=connected') !== false, 'the settings tab reloads as Connected');
+$https_guard = strpos($admin_js, 'window.kiyohAdminData.requiresHttps');
+$popup_open = strpos($admin_js, "window.open('', 'kiyoh_connect'");
+expect_true($https_guard !== false && $popup_open !== false && $https_guard < $popup_open, 'HTTP Connect shows the HTTPS message and does not open the popup');
+expect_true(strpos($admin_js, '$(\'#credential_touch\').val(\'manual\')') !== false, 'editing the key marks a manual connection');
+
+$rejected = Kiyoh_Api_Client::assess_statistics_payload(401, array('errorCode' => 'ERROR_401'));
+expect_false($rejected['ok'], 'HTTP 401 is a failed connection');
+expect_same('The API key was rejected.', $rejected['message'], 'a rejected API key is explicit');
+expect_false(Kiyoh_Api_Client::assess_statistics_payload(200, array('errorCode' => 'ERROR_401'))['ok'], 'an error body is not a successful connection');
+$stats_ok = Kiyoh_Api_Client::assess_statistics_payload(200, array('averageRating' => 8.2, 'numberReviews' => 12));
+expect_true($stats_ok['ok'], 'statistics with a rating are a successful connection');
+expect_same('API connection successful', $stats_ok['message'], 'a real statistics payload stays successful');
+
+expect_true(Kiyoh_Rating_Manager::is_credentials_configuration_error('API credentials are not configured or the plugin is disabled.'), 'the long credentials notice is recognised');
+expect_true(Kiyoh_Rating_Manager::is_credentials_configuration_error('API credentials not configured'), 'the short credentials notice is recognised');
+expect_false(Kiyoh_Rating_Manager::is_credentials_configuration_error('Unauthorized request'), 'an API rejection is not the credentials notice');
+
+$display = file_get_contents(dirname(__DIR__) . '/kiyoh-woocommerce-plugin/kiyoh-woocommerce/admin/partials/kiyoh-admin-display.php');
+expect_true(strpos($display, 'Manual connection.') !== false, 'a saved manual key has a manual connection status');
+expect_true(strpos($display, 'Disconnect Kiyoh-Connect') !== false, 'Disconnect Kiyoh-Connect is on the settings page');
+expect_true(strpos($display, 'if (!$credentials_ready)') !== false, 'the credentials notice depends on the saved settings');
+$session_source = file_get_contents(dirname(__DIR__) . '/kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/class-kiyoh-connect-session.php');
+expect_true(strpos($session_source, "['credential_source'] = 'connect'") !== false, 'Connect stores credential_source connect so Disconnect can show');
+$client_source = file_get_contents(dirname(__DIR__) . '/kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/api/class-kiyoh-api-client.php');
+expect_true(strpos($client_source, "make_request('GET', \$url, null, false)") !== false, 'the connection test does not refresh a Connect key after a rejected manual key');
 expect_true(strpos($admin_js, ", '*'") === false && strpos($admin_js, ', "*"') === false, 'admin script does not postMessage to *');
 $session_php = file_get_contents(dirname(__DIR__) . '/kiyoh-woocommerce-plugin/kiyoh-woocommerce/includes/class-kiyoh-connect-session.php');
 expect_true(strpos($session_php, "header('Cross-Origin-Opener-Policy: unsafe-none');") !== false, 'the callback response does not sever window.opener');

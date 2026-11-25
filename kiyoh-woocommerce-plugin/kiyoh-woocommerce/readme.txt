@@ -37,6 +37,11 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 
 == Changelog ==
 
+= 1.4.4 =
+* The General tab notice follows the saved plugin switch, Location ID, and API key. A stale "credentials not configured" rating-sync error is cleared once those are saved (KP-93).
+* Test API Connection reports a rejected API key instead of a successful connection. Editing the key and saving shows **Manual connection.** (KP-93)
+* Disconnect Kiyoh-Connect is available after Connect. On an HTTP shop, Connect shows that HTTPS is required and does not redirect. (KP-93)
+
 = 1.4.3 =
 * Kiyoh Mobile health backs off on failed posts (credential rejection on 401/403, exponential backoff on other errors) and coalesces sends with a 10-minute minimum between opportunistic posts.
 

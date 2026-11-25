@@ -200,12 +200,40 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         $endpoint = '/v1/publication/review/external/location/statistics';
         $params = array('locationId' => $this->location_id);
         $url = $endpoint . '?' . http_build_query($params);
-        
-        $response = $this->make_request('GET', $url);
+
+        // The connection test must judge the saved key. A 401 refresh would
+        // swap in the Connect key and hide a rejected manual key.
+        $response = $this->make_request('GET', $url, null, false);
         return new Kiyoh_Api_Response($response);
     }
+
+    /**
+     * @param int $http_code
+     * @param mixed $data
+     * @return array{ok:bool,message:string}
+     */
+    public static function assess_statistics_payload($http_code, $data) {
+        $http_code = (int) $http_code;
+        $error_code = (is_array($data) && isset($data['errorCode'])) ? (string) $data['errorCode'] : '';
+        if ($http_code === 401 || $http_code === 403 || $error_code === 'ERROR_401' || $error_code === 'UNAUTHORIZED') {
+            return array(
+                'ok' => false,
+                'message' => 'The API key was rejected.',
+            );
+        }
+        if ($http_code >= 200 && $http_code < 300 && is_array($data) && (array_key_exists('numberReviews', $data) || array_key_exists('averageRating', $data))) {
+            return array(
+                'ok' => true,
+                'message' => 'API connection successful',
+            );
+        }
+        return array(
+            'ok' => false,
+            'message' => 'API connection failed.',
+        );
+    }
     
-    private function make_request($method, $endpoint, $data = null) {
+    private function make_request($method, $endpoint, $data = null, $refresh_on_unauthorized = true) {
         $url = $this->base_url . $endpoint;
         
         $args = array(
@@ -245,7 +273,7 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
 
-        if ((int) $response_code === 401 && !$this->connect_refreshed) {
+        if ((int) $response_code === 401 && $refresh_on_unauthorized && !$this->connect_refreshed) {
             $this->connect_refreshed = true;
             if ($this->try_refresh_connect_credentials()) {
                 return $this->make_request($method, $endpoint, $data);

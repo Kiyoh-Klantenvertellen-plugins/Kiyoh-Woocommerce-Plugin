@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.4.4
+
+### Fixed
+- **General settings notice (KP-93).** "API credentials are not configured or the plugin is disabled" is shown only when the saved plugin switch is off or the Location ID or API key is empty. A rating-sync failure with that text (or "API credentials not configured") is cleared once the saved settings are complete, so Test API Connection and the notice agree.
+- **Wrong API key (KP-93).** Test API Connection calls the statistics endpoint with the saved key and does not refresh a Kiyoh-Connect key after HTTP 401. A rejected key shows "The API key was rejected." Editing the Location ID or API key and saving sets the status to **Manual connection.**
+- **Disconnect Kiyoh-Connect (KP-93).** A completed Connect sign-in stores `credential_source` as `connect`, so the Disconnect button is shown. Disconnect still clears the Location ID and API key and leaves invitation settings.
+- **HTTP shops (KP-93).** Connect checks the shop URL before opening a popup or redirecting. An HTTP shop shows the HTTPS required message. A manual Location ID and API key can still be saved and tested.
+
 ## v1.4.3
 
 ### Fixed

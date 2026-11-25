@@ -111,7 +111,12 @@ class Kiyoh_Connect_Session {
             wp_send_json_error(array('message' => __('This server cannot protect Connect tokens because OpenSSL is missing.', 'kiyoh-woocommerce')), 500);
         }
 
-        $origin = Kiyoh_Connect::shop_origin(home_url('/'));
+        $home = home_url('/');
+        if (Kiyoh_Connect::connect_block_reason($home) === 'http') {
+            wp_send_json_error(array('message' => Kiyoh_Connect::validation_message('http')), 400);
+        }
+
+        $origin = Kiyoh_Connect::shop_origin($home);
         $callback = Kiyoh_Connect::callback_url($origin);
         $resolved = self::resolved_ips($origin);
         $check = Kiyoh_Connect::validate_callback_url($callback, $resolved);
@@ -561,6 +566,7 @@ class Kiyoh_Connect_Session {
             $settings['general']['location_id'] = $location_id;
             $settings['general']['api_key'] = $api_key;
             $settings['general']['platform'] = $platform;
+            $settings['general']['credential_source'] = 'connect';
             if (!isset($settings['general']['enabled'])) {
                 $settings['general']['enabled'] = true;
             }

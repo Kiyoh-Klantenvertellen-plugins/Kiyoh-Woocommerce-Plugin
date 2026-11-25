@@ -31,6 +31,7 @@
 
             // Form validation
             $(document).on('blur', 'input[name*="location_id"], input[name*="api_key"]', this.validateCredentials);
+            $(document).on('input', '#location_id, #api_key', this.markManualCredentials);
 
             // Bulk sync button
             $(document).on('click', '#bulk-sync-products', this.handleBulkSync);
@@ -96,9 +97,18 @@
             $('#kiyoh-connect-results').empty().append(notice);
         },
 
+        markManualCredentials: function () {
+            $('#credential_touch').val('manual');
+        },
+
         handleConnectStart: function (e) {
             e.preventDefault();
+            if (window.kiyohAdminData && window.kiyohAdminData.requiresHttps) {
+                KiyohAdmin.showConnectResult('error', window.kiyohAdminData.httpsMessage || 'Kiyoh-Connect needs an HTTPS shop address. This shop is using HTTP, so Connect cannot return here. Use the Location ID and API key fields, or serve the shop over HTTPS.');
+                return;
+            }
             if (!window.kiyoh_admin_ajax || !window.kiyohAdminData) {
+                KiyohAdmin.showConnectResult('error', 'Kiyoh-Connect could not start.');
                 return;
             }
             var popup = window.open('', 'kiyoh_connect', 'popup=yes,width=520,height=760');
