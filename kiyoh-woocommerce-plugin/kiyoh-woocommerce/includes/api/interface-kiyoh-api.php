@@ -13,4 +13,6 @@ interface Kiyoh_Api_Interface {
     public function get_updated_products($updated_since);
     
     public function get_company_stats();
+
+    public function get_shop_reviews($query_params = array());
 }

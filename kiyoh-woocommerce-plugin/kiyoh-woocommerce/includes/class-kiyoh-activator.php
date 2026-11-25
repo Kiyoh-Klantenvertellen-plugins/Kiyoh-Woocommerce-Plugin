@@ -8,6 +8,51 @@
 class Kiyoh_Activator {
 
     /**
+     * Run data migrations when the plugin version in the database is older than the code.
+     */
+    public static function maybe_upgrade() {
+        if (!function_exists('get_option')) {
+            return;
+        }
+
+        $stored_version = get_option('kiyoh_woocommerce_version', '0');
+        if (!is_string($stored_version) || $stored_version === '') {
+            $stored_version = '0';
+        }
+
+        if (version_compare($stored_version, KIYOH_WOOCOMMERCE_VERSION, '>=')) {
+            return;
+        }
+
+        if (version_compare($stored_version, '1.4.4', '<')) {
+            self::upgrade_1_4_4_remove_staging_mobile_urls();
+        }
+
+        self::create_tables();
+        update_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
+        self::schedule_cron_events();
+    }
+
+    /**
+     * Drop saved mobile_urls when they pointed at the Railway staging host (merchant field removed).
+     */
+    private static function upgrade_1_4_4_remove_staging_mobile_urls() {
+        if (!class_exists('Kiyoh_Mobile_Health')) {
+            require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health.php';
+        }
+
+        $settings = get_option('kiyoh_woocommerce_settings', array());
+        if (!is_array($settings)) {
+            return;
+        }
+
+        $updated = Kiyoh_Mobile_Health::maybe_clear_staging_mobile_urls($settings);
+        if ($updated !== $settings) {
+            update_option('kiyoh_woocommerce_settings', $updated);
+        }
+    }
+
+    /**
      * Plugin activation handler
      */
     public static function activate() {
@@ -127,12 +172,16 @@ class Kiyoh_Activator {
             scheduled_for datetime DEFAULT NULL,
             status varchar(20) DEFAULT 'pending',
             response_data text,
+            error_code varchar(64) DEFAULT NULL,
+            retry_attempts smallint UNSIGNED DEFAULT 0,
+            retry_at datetime DEFAULT NULL,
             created_at datetime DEFAULT CURRENT_TIMESTAMP,
             PRIMARY KEY (id),
             KEY order_id (order_id),
             KEY customer_email (customer_email),
             KEY status (status),
-            KEY scheduled_for (scheduled_for)
+            KEY scheduled_for (scheduled_for),
+            KEY invite_error_retry (status, retry_at)
         ) $charset_collate;";
 
         // Review cache table
@@ -184,9 +233,10 @@ class Kiyoh_Activator {
                 'fallback_language' => 'en'
             ),
             'frontend' => array(
-                'shop_widget_enabled' => true,
-                'product_widget_enabled' => true,
+                'shop_reviews_enabled' => false,
+                'shop_reviews_limit' => 5,
                 'cache_ttl' => 3600,
+                'product_widget_enabled' => true,
                 'template' => 'default',
                 'items_per_page' => 10,
                 'show_aggregates' => true,
@@ -202,8 +252,8 @@ class Kiyoh_Activator {
             add_option('kiyoh_woocommerce_settings', $default_settings);
         }
 
-        // Set plugin version
-        add_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
+        // Set plugin version (upgrade path may bump this on plugins_loaded)
+        update_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
     }
 
     /**
@@ -222,6 +272,10 @@ class Kiyoh_Activator {
 
         if (!wp_next_scheduled('kiyoh_sync_product_ratings')) {
             wp_schedule_event(time(), 'hourly', 'kiyoh_sync_product_ratings');
+        }
+
+        if (!wp_next_scheduled('kiyoh_daily_full_rating_sync')) {
+            wp_schedule_event(time() + 3600, 'daily', 'kiyoh_daily_full_rating_sync');
         }
 
         // Daily shop-health heartbeat for Kiyoh Mobile. Unchanged reports are

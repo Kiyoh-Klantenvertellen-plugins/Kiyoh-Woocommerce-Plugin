@@ -201,19 +201,6 @@ class Kiyoh_Admin {
                 'description' => __('Your API key from your Kiyoh/Klantenvertellen account', 'kiyoh-woocommerce')
             )
         );
-
-        add_settings_field(
-            'mobile_urls',
-            __('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'),
-            array($this, 'text_field_callback'),
-            'kiyoh-settings',
-            'kiyoh_general_section',
-            array(
-                'name' => 'kiyoh_woocommerce_settings[general][mobile_urls]',
-                'value' => $this->get_option('general', 'mobile_urls', ''),
-                'description' => __('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to report only to https://kiyoh-mobile.com. Testers: enter https://kiyohmobileui-staging.up.railway.app.', 'kiyoh-woocommerce')
-            )
-        );
     }
 
     private function register_product_sync_fields() {
@@ -379,7 +366,7 @@ class Kiyoh_Admin {
             array(
                 'name' => 'kiyoh_woocommerce_settings[invitations][language_auto]',
                 'value' => $this->get_option('invitations', 'language_auto', true),
-                'description' => __('Automatically detect customer language from WordPress locale', 'kiyoh-woocommerce')
+                'description' => __('When enabled, invitations use the order language (WPML wpml_language or Polylang) when present, then the logged-in customer locale, then the current request locale, then the site default. When disabled, only the fallback language below is sent.', 'kiyoh-woocommerce')
             )
         );
 
@@ -528,17 +515,10 @@ class Kiyoh_Admin {
 
         if (isset($input['general'])) {
             $existing_settings = get_option('kiyoh_woocommerce_settings', array());
-            $previous_urls = '';
-            if (is_array($existing_settings) && isset($existing_settings['general']['mobile_urls'])) {
-                $previous_urls = $existing_settings['general']['mobile_urls'];
-            }
-            $mobile_urls = $previous_urls;
-            if (is_array($input['general']) && array_key_exists('mobile_urls', $input['general'])) {
-                $mobile_urls = sanitize_text_field($input['general']['mobile_urls']);
-            }
 
             $new_location = sanitize_text_field($input['general']['location_id'] ?? '');
             $new_key = sanitize_text_field($input['general']['api_key'] ?? '');
+            $credential_touch = sanitize_text_field($input['general']['credential_touch'] ?? '');
             $old_location = '';
             $old_key = '';
             $old_source = 'manual';
@@ -552,7 +532,7 @@ class Kiyoh_Admin {
                 $source = 'connect';
             } elseif ($apply_mode === 'disconnect') {
                 $source = 'manual';
-            } elseif ($new_location !== $old_location || $new_key !== $old_key) {
+            } elseif ($credential_touch === 'manual' || $new_location !== $old_location || $new_key !== $old_key) {
                 $source = 'manual';
                 if ($old_source === 'connect' && class_exists('Kiyoh_Connect_Session')) {
                     Kiyoh_Connect_Session::on_manual_override();
@@ -570,7 +550,6 @@ class Kiyoh_Admin {
                 'platform' => $platform,
                 'location_id' => $new_location,
                 'api_key' => $new_key,
-                'mobile_urls' => $mobile_urls,
                 'credential_source' => $source,
             );
         }
@@ -612,6 +591,22 @@ class Kiyoh_Admin {
             $sanitized['ratings'] = array(
                 'enabled' => ($source !== 'woocommerce'),
                 'source' => $source
+            );
+        }
+
+        if (isset($input['frontend'])) {
+            $cache_ttl = isset($input['frontend']['cache_ttl']) ? absint($input['frontend']['cache_ttl']) : 3600;
+            if ($cache_ttl < 300) {
+                $cache_ttl = 300;
+            }
+            if ($cache_ttl > DAY_IN_SECONDS) {
+                $cache_ttl = DAY_IN_SECONDS;
+            }
+
+            $sanitized['frontend'] = array(
+                'shop_reviews_enabled' => !empty($input['frontend']['shop_reviews_enabled']),
+                'shop_reviews_limit' => max(1, min(50, absint($input['frontend']['shop_reviews_limit'] ?? 5))),
+                'cache_ttl' => $cache_ttl,
             );
         }
 
@@ -766,22 +761,26 @@ class Kiyoh_Admin {
             wp_die('Insufficient permissions');
         }
 
-        $rating_manager = new Kiyoh_Rating_Manager();
-        $queued = $rating_manager->queue_full_sync();
+        try {
+            $rating_manager = new Kiyoh_Rating_Manager();
+            $queued = $rating_manager->queue_full_sync();
 
-        if (isset($queued['status']) && $queued['status'] === 'failed' && !empty($queued['error'])) {
-            wp_send_json_error(array(
-                'message' => $queued['error'],
-                'sync' => $rating_manager->get_public_sync_status()
+            if (isset($queued['status']) && $queued['status'] === 'failed' && !empty($queued['error'])) {
+                wp_send_json_error(array(
+                    'message' => $queued['error'],
+                    'sync' => $rating_manager->get_public_sync_status()
+                ), 200);
+            }
+
+            $status = $rating_manager->process_job_chunk();
+
+            wp_send_json_success(array(
+                'message' => isset($status['message']) ? $status['message'] : '',
+                'sync' => $status
             ));
+        } catch (Throwable $e) {
+            $this->send_rating_sync_ajax_failure($e);
         }
-
-        $status = $rating_manager->process_job_chunk();
-
-        wp_send_json_success(array(
-            'message' => isset($status['message']) ? $status['message'] : '',
-            'sync' => $status
-        ));
     }
 
     /**
@@ -797,16 +796,35 @@ class Kiyoh_Admin {
             wp_die('Insufficient permissions');
         }
 
-        $rating_manager = new Kiyoh_Rating_Manager();
-        $status = $rating_manager->get_public_sync_status();
+        try {
+            $rating_manager = new Kiyoh_Rating_Manager();
+            $status = $rating_manager->get_public_sync_status();
 
-        if (!empty($status['active'])) {
-            $status = $rating_manager->process_job_chunk();
+            if (!empty($status['active'])) {
+                $status = $rating_manager->process_job_chunk();
+            }
+
+            wp_send_json_success(array(
+                'sync' => $status
+            ));
+        } catch (Throwable $e) {
+            $this->send_rating_sync_ajax_failure($e);
         }
+    }
 
-        wp_send_json_success(array(
-            'sync' => $status
-        ));
+    /**
+     * @param Throwable $e
+     */
+    private function send_rating_sync_ajax_failure($e) {
+        error_log('Kiyoh Rating Sync AJAX: ' . $e->getMessage());
+        wp_send_json_error(array(
+            'message' => __('Product rating sync failed: ', 'kiyoh-woocommerce') . $e->getMessage(),
+            'sync' => array(
+                'status' => 'failed',
+                'active' => false,
+                'error' => $e->getMessage(),
+            ),
+        ), 200);
     }
 
     /**
@@ -867,6 +885,48 @@ class Kiyoh_Admin {
     }
 
     /**
+     * Immediate invites that errored or could not be retried.
+     */
+    public function render_invitation_errors() {
+        if (!current_user_can('manage_woocommerce') || !class_exists('Kiyoh_Invitation_Manager')) {
+            return;
+        }
+
+        $rows = Kiyoh_Invitation_Manager::get_recent_invitation_errors(25);
+        $mail_limit = Kiyoh_Invitation_Manager::has_recent_mail_limit_errors(7);
+
+        if ($mail_limit) {
+            echo '<div class="notice notice-warning inline"><p>';
+            echo esc_html(Kiyoh_Invitation_Errors::merchant_message('MAIL_LIMIT_EXCEED'));
+            echo '</p></div>';
+        }
+
+        if (empty($rows)) {
+            return;
+        }
+
+        echo '<h3>' . esc_html__('Recent invitation errors', 'kiyoh-woocommerce') . '</h3>';
+        echo '<p class="description">' . esc_html__('Retryable errors are resent automatically up to three times. Permanent errors are not retried.', 'kiyoh-woocommerce') . '</p>';
+        echo '<table class="widefat striped kiyoh-invitation-errors"><thead><tr>';
+        echo '<th>' . esc_html__('Order', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Customer', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Status', 'kiyoh-woocommerce') . '</th>';
+        echo '<th>' . esc_html__('Detail', 'kiyoh-woocommerce') . '</th>';
+        echo '</tr></thead><tbody>';
+
+        foreach ($rows as $row) {
+            echo '<tr>';
+            echo '<td>' . $this->scheduled_invitation_order_link($row) . '</td>';
+            echo '<td>' . esc_html($row->customer_email) . '</td>';
+            echo '<td>' . esc_html($this->scheduled_invitation_status_label($row->status)) . '</td>';
+            echo '<td>' . esc_html($this->scheduled_invitation_detail($row)) . '</td>';
+            echo '</tr>';
+        }
+
+        echo '</tbody></table>';
+    }
+
+    /**
      * @param object $row Invitation row.
      * @return string
      */
@@ -914,6 +974,7 @@ class Kiyoh_Admin {
             'sending' => __('Sending', 'kiyoh-woocommerce'),
             'sent' => __('Sent', 'kiyoh-woocommerce'),
             'error' => __('Error', 'kiyoh-woocommerce'),
+            'failed_final' => __('Failed permanently', 'kiyoh-woocommerce'),
             'skipped' => __('Skipped', 'kiyoh-woocommerce'),
         );
 
@@ -930,6 +991,20 @@ class Kiyoh_Admin {
             $parsed = json_decode($row->response_data, true);
             if (is_array($parsed)) {
                 $decoded = $parsed;
+            }
+        }
+
+        if (!empty($decoded['error_code'])) {
+            $merchant = Kiyoh_Invitation_Errors::merchant_message($decoded['error_code']);
+            if ($merchant !== '') {
+                return $merchant;
+            }
+        }
+
+        if (!empty($row->error_code)) {
+            $merchant = Kiyoh_Invitation_Errors::merchant_message($row->error_code);
+            if ($merchant !== '') {
+                return $merchant;
             }
         }
 
@@ -973,8 +1048,12 @@ class Kiyoh_Admin {
             } else {
                 $client = Kiyoh_Api_Factory::create_client();
                 $response = $client->get_company_stats();
+                $payload = $response->is_success() ? $response->get_data() : array(
+                    'errorCode' => $response->get_error_code(),
+                );
+                $assessment = Kiyoh_Api_Client::assess_statistics_payload((int) $response->get_response_code(), $payload);
 
-                if ($response->is_success()) {
+                if ($assessment['ok']) {
                     $data = $response->get_data();
                     $result = array(
                         'success' => true,
@@ -983,9 +1062,14 @@ class Kiyoh_Admin {
                         'http_status' => $response->get_response_code(),
                     );
                 } else {
+                    $detail = $response->get_error();
+                    $message = $assessment['message'];
+                    if ($message === 'API connection failed.' && is_string($detail) && $detail !== '') {
+                        $message = 'API connection failed: ' . $detail;
+                    }
                     $result = array(
                         'success' => false,
-                        'message' => 'API connection failed: ' . $response->get_error(),
+                        'message' => $message,
                         'error_code' => $response->get_error_code(),
                         'http_status' => $response->get_response_code(),
                     );

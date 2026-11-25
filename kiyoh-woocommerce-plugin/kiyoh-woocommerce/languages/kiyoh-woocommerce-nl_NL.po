@@ -1,0 +1,9 @@
+msgid ""
+msgstr ""
+"Project-Id-Version: Kiyoh WooCommerce 1.4.5\n"
+"Language: nl_NL\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+
+msgid "Your Kiyoh account has reached its email invitation limit. New invitations cannot be sent until the limit resets. Contact Kiyoh or Klantenvertellen support for help."
+msgstr "Uw Kiyoh-account heeft de limiet voor uitnodigingsmails bereikt. Er kunnen geen nieuwe uitnodigingen worden verstuurd totdat de limiet is vernieuwd. Neem contact op met de support van Kiyoh of Klantenvertellen."

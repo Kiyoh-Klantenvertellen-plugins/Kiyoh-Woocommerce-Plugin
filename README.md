@@ -25,14 +25,14 @@ Kiyoh Reviews is a WooCommerce plugin that automatically collects customer revie
 
 ### Recommended for Best Performance
 - **WordPress**: 7.1.3 (tested)
-- **WooCommerce**: 11.2.1 (tested), with High-Performance Order Storage and the Checkout block
+- **WooCommerce**: 11.3 (tested), with High-Performance Order Storage and the Checkout block
 - **PHP**: 8.2 or higher
 - **SSL Certificate**: For secure API communication
 
 ### Compatibility
 The plugin is compatible with:
 - ✅ WordPress 5.8+ with WooCommerce 5.0+
-- ✅ Tested up to WordPress 7.1.3 and WooCommerce 11.2.1
+- ✅ Tested up to WordPress 7.1.3 and WooCommerce 11.3
 - ✅ High-Performance Order Storage (HPOS) and Cart & Checkout blocks
 - ✅ All standard WordPress installations
 - ✅ Multi-site installations
@@ -146,7 +146,7 @@ In the **Review Invitation Settings** section:
 
 **Customer Settings:**
 - **Excluded Customer Groups**: Skip certain user roles (e.g., wholesale customers)
-- **Auto-detect Language**: Automatically detect customer language from WordPress locale
+- **Auto-detect Language**: When enabled, use the order language (WPML `wpml_language` or Polylang) when present, then WordPress locales; when disabled, use only the fallback language below
 - **Fallback Language**: Default language if customer language can't be detected (e.g., "en" for English)
 
 **Choosing the Right Invitation Type:**
@@ -243,8 +243,8 @@ Enable WordPress debug logging to see detailed information about plugin operatio
 
 ## About This Plugin
 
-**Version**: 1.4.2  
-**Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.2.1). Requires PHP 8.2.  
+**Version**: 1.4.6  
+**Compatibility**: WordPress 5.8+ (tested up to 7.1.3) with WooCommerce 5.0+ (tested up to 11.3). Requires PHP 8.2.  
 **Developer**: Kiyoh  
 **License**: Proprietary
 **Last Updated**: October 2026  
@@ -261,11 +261,7 @@ For technical support:
 
 The plugin tells Kiyoh Mobile whether this shop is connected, when invites and product sync last succeeded, and whether Kiyoh ministars are shown. That report is sent when Connect saves the location and invite key, when you save settings, test the connection, send or fail an invite, or sync products, and again once a day.
 
-On **WooCommerce → Kiyoh → General**, **Kiyoh Mobile URL(s)** is a comma-separated list of base URLs. Leave it blank to report only to production:
-
-`https://kiyoh-mobile.com` (testers enter `https://kiyohmobileui-staging.up.railway.app`)
-
-The same list can be set with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter. A non-blank setting overrides the constant. The filter overrides both. The report uses the saved API key and Location ID. Each URL gets one short request at the end of the page load. If Kiyoh Mobile does not answer, invitations and checkout still finish.
+By default, health reports go to `https://kiyoh-mobile.com`. Testers can point at other hosts with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter; the filter wins over the constant. The report uses the saved API key and Location ID. Each URL gets one short request at the end of the page load. If Kiyoh Mobile does not answer, invitations and checkout still finish.
 
 ## Advanced Configuration
 
@@ -275,7 +271,11 @@ The plugin is compatible with WordPress multisite installations. Configure each 
 
 ### WPML/Polylang Compatibility
 
-The plugin works with multilingual plugins and will attempt to detect customer language for invitations.
+With **Auto-detect Language** enabled (Invitations tab), review invitations use the language stored on the order (`wpml_language` for WPML, or Polylang’s order language) so a French checkout still receives a French invite when an admin later changes the order status. Turn auto-detect off to always send the fallback language.
+
+### Shop reviews on your site
+
+On **WooCommerce → Kiyoh → Reviews**, enable **Fetch and show location (shop) reviews** (off by default). Then add `[kiyoh_shop_reviews limit="5"]`, the **Kiyoh shop reviews** widget, or the **Kiyoh shop reviews** block. Reviews are cached for the TTL you set (default one hour). Product ministar sync is separate and unchanged.
 
 ## Permissions
 

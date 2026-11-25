@@ -10,8 +10,9 @@ class Kiyoh_Mobile_Health {
 
     const PLATFORM = 'woocommerce';
     const HEALTH_PATH = '/api/integrations/health';
-    /** Production and staging. A blank setting uses this list, same as the other plugins. */
+    /** Production-only default when nothing is configured. */
     const DEFAULT_URLS = 'https://kiyoh-mobile.com';
+    const STAGING_ORIGIN = 'https://kiyohmobileui-staging.up.railway.app';
     const HEADER_PUBLICATION = 'X-Publication-Api-Token';
     const HEADER_LOCATION = 'X-Location-Id';
     const CRON_HOOK = 'kiyoh_report_mobile_health';
@@ -31,8 +32,9 @@ class Kiyoh_Mobile_Health {
     const MIN_SEND_INTERVAL_SECONDS = 600;
     /** First wait after a transient error (5xx, timeout, other non-auth failures). */
     const BACKOFF_INITIAL_SECONDS = 300;
-    /** Cap for exponential backoff on transient errors. */
+    /** Cap for exponential backoff on transient errors. Also used for HTTP 401/403 auth backoff. */
     const BACKOFF_MAX_SECONDS = 86400;
+    const AUTH_BACKOFF_SECONDS = 86400;
 
     /**
      * @return array
@@ -121,7 +123,7 @@ class Kiyoh_Mobile_Health {
     }
 
     /**
-     * Setting wins when it is non-blank. Otherwise the constant, otherwise production and staging.
+     * Legacy saved setting wins when non-blank, else constant, else production only.
      *
      * @param mixed $setting_value
      * @param mixed $constant_value
@@ -137,6 +139,29 @@ class Kiyoh_Mobile_Health {
         }
 
         return self::parse_urls($raw);
+    }
+
+    /**
+     * Remove general.mobile_urls from saved settings when the list includes staging (v1.4.4 upgrade).
+     *
+     * @param array $settings
+     * @return array
+     */
+    public static function maybe_clear_staging_mobile_urls(array $settings) {
+        if (!isset($settings['general']['mobile_urls'])) {
+            return $settings;
+        }
+        $raw = $settings['general']['mobile_urls'];
+        if (!is_string($raw) || trim($raw) === '') {
+            return $settings;
+        }
+        $parsed = self::parse_urls($raw);
+        if (!in_array(self::STAGING_ORIGIN, $parsed, true)) {
+            return $settings;
+        }
+        unset($settings['general']['mobile_urls']);
+
+        return $settings;
     }
 
     /**
@@ -698,6 +723,9 @@ class Kiyoh_Mobile_Health {
             if (!is_array($report) || empty($report['blocked_until'])) {
                 continue;
             }
+            if (!empty($report['auth_backoff'])) {
+                continue;
+            }
             if ((int) $report['blocked_until'] > (int) $now) {
                 $blocked[$url] = array(
                     'digest' => '',
@@ -709,6 +737,36 @@ class Kiyoh_Mobile_Health {
         $state['reports'] = $blocked;
 
         return $state;
+    }
+
+    /**
+     * @param array $state
+     * @param int   $now
+     * @return array
+     */
+    public static function clear_auth_report_blocks($state, $now) {
+        $state = self::normalize_state($state, $now);
+        foreach ($state['reports'] as $url => $report) {
+            if (!is_array($report) || empty($report['auth_backoff'])) {
+                continue;
+            }
+            unset($state['reports'][$url]);
+        }
+
+        return $state;
+    }
+
+    /**
+     * @param mixed $version
+     * @return string
+     */
+    public static function health_user_agent($version) {
+        $version = self::normalize_plugin_version($version);
+        if ($version === '') {
+            return 'Kiyoh-WooCommerce';
+        }
+
+        return 'Kiyoh-WooCommerce/' . $version;
     }
 
     /**
@@ -913,6 +971,7 @@ class Kiyoh_Mobile_Health {
             $current['at'] = (int) $now;
             $current['blocked_until'] = 0;
             $current['fail_streak'] = 0;
+            unset($current['auth_backoff']);
             $state['reports'][$url] = $current;
             $state = self::clear_credentials_rejection($state);
             return $state;
@@ -921,6 +980,7 @@ class Kiyoh_Mobile_Health {
         if ($status === 429) {
             $seconds = self::retry_after_seconds($retry_after_header, $body, $now);
             $current['blocked_until'] = (int) $now + $seconds;
+            unset($current['auth_backoff']);
             $state['reports'][$url] = $current;
             return $state;
         }
@@ -932,7 +992,8 @@ class Kiyoh_Mobile_Health {
                 }
                 $state['auth']['rejected_credentials_hash'] = $credentials_hash;
             }
-            $current['blocked_until'] = (int) $now + self::BACKOFF_MAX_SECONDS;
+            $current['blocked_until'] = (int) $now + self::AUTH_BACKOFF_SECONDS;
+            $current['auth_backoff'] = true;
             $state['reports'][$url] = $current;
             return $state;
         }

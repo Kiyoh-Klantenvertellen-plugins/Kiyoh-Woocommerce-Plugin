@@ -30,7 +30,7 @@ function expect_false($actual, $message) {
 
 $now = 1761206400; // 2026-10-23 08:00:00 UTC
 $production = 'https://kiyoh-mobile.com';
-$staging = 'https://kiyohmobileui-staging.up.railway.app';
+$staging = Kiyoh_Mobile_Health::STAGING_ORIGIN;
 
 expect_same(
     array($production),
@@ -42,13 +42,18 @@ expect_same(
     Kiyoh_Mobile_Health::DEFAULT_URLS,
     'the default never includes staging'
 );
-expect_same(array($staging), Kiyoh_Mobile_Health::resolve_base_urls($staging, ''), 'testers can set staging in the field');
+expect_same(array($staging), Kiyoh_Mobile_Health::resolve_base_urls('', $staging), 'testers can set staging via KIYOH_MOBILE_URLS');
 expect_same(array($production), Kiyoh_Mobile_Health::resolve_base_urls('  ', $production), 'blank setting keeps the constant');
 expect_same(
     array($production, $staging),
     Kiyoh_Mobile_Health::resolve_base_urls($production . ', ' . $staging, $production),
-    'a non-blank setting overrides the constant'
+    'a legacy saved setting overrides the constant'
 );
+
+$with_staging = array('general' => array('mobile_urls' => $staging));
+expect_false(isset(Kiyoh_Mobile_Health::maybe_clear_staging_mobile_urls($with_staging)['general']['mobile_urls']), 'upgrade drops mobile_urls that contain staging');
+$production_only = array('general' => array('mobile_urls' => $production));
+expect_same($production, Kiyoh_Mobile_Health::maybe_clear_staging_mobile_urls($production_only)['general']['mobile_urls'], 'upgrade keeps mobile_urls without staging');
 expect_same(
     array($staging),
     Kiyoh_Mobile_Health::apply_url_override(array($production), $staging),
@@ -248,6 +253,32 @@ expect_true(
 
 $auth_fail = Kiyoh_Mobile_Health::apply_post_result(Kiyoh_Mobile_Health::empty_state(), $production, $same, $now + 25, 401, '', '', $cred_hash);
 expect_same($cred_hash, $auth_fail['auth']['rejected_credentials_hash'], '401 stores the credentials fingerprint');
+expect_same(
+    $now + 25 + Kiyoh_Mobile_Health::AUTH_BACKOFF_SECONDS,
+    $auth_fail['reports'][$production]['blocked_until'],
+    '401 starts a 24h publish backoff'
+);
+expect_true(!empty($auth_fail['reports'][$production]['auth_backoff']), '401 marks the report as auth backoff');
+
+$forbidden = Kiyoh_Mobile_Health::apply_post_result(Kiyoh_Mobile_Health::empty_state(), $staging, $same, $now + 26, 403, '', '', $cred_hash);
+expect_same(
+    $now + 26 + Kiyoh_Mobile_Health::AUTH_BACKOFF_SECONDS,
+    $forbidden['reports'][$staging]['blocked_until'],
+    '403 uses the same auth backoff window'
+);
+
+expect_same('Kiyoh-WooCommerce/1.4.5', Kiyoh_Mobile_Health::health_user_agent('1.4.5'), 'health user agent includes plugin version');
+
+$auth_block = Kiyoh_Mobile_Health::apply_post_result(Kiyoh_Mobile_Health::empty_state(), $production, $same, $now + 30, 401, '', '', $cred_hash);
+$auth_block['reports'][$staging] = array('digest' => 'x', 'at' => $now, 'blocked_until' => $now + 99);
+$cleared = Kiyoh_Mobile_Health::on_credentials_changed(
+    $auth_block,
+    array('general' => array('api_key' => 'a', 'location_id' => 'loc-1')),
+    array('general' => array('api_key' => 'b', 'location_id' => 'loc-1')),
+    $now + 35
+);
+expect_false(isset($cleared['reports'][$production]), 'credential change clears an auth backoff block');
+expect_same($now + 99, $cleared['reports'][$staging]['blocked_until'], 'credential change keeps an active non-auth block');
 expect_false(
     Kiyoh_Mobile_Health::should_send(
         $auth_fail['reports'][$production],
@@ -261,9 +292,14 @@ expect_false(
     '401 stops sends until credentials change'
 );
 $auth_fail = Kiyoh_Mobile_Health::clear_credentials_rejection($auth_fail);
+$auth_fail = Kiyoh_Mobile_Health::clear_auth_report_blocks($auth_fail, $now + 30);
 expect_true(
-    Kiyoh_Mobile_Health::should_send($auth_fail['reports'][$production], 'new-digest', $now + 30),
-    'clearing rejection allows a send again'
+    Kiyoh_Mobile_Health::should_send(
+        isset($auth_fail['reports'][$production]) ? $auth_fail['reports'][$production] : null,
+        'new-digest',
+        $now + 30
+    ),
+    'clearing rejection and auth backoff allows a send again'
 );
 
 expect_false(

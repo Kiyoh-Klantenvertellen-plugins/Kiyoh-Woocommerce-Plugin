@@ -61,6 +61,7 @@ class Kiyoh_Deactivator {
             wp_unschedule_event($timestamp, 'kiyoh_sync_product_ratings');
         }
         wp_clear_scheduled_hook('kiyoh_sync_product_ratings');
+        wp_clear_scheduled_hook('kiyoh_daily_full_rating_sync');
         wp_clear_scheduled_hook('kiyoh_process_rating_sync');
         wp_clear_scheduled_hook('kiyoh_report_mobile_health');
 

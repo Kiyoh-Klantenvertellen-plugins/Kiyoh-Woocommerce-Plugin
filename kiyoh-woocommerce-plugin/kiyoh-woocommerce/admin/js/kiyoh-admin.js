@@ -31,6 +31,7 @@
 
             // Form validation
             $(document).on('blur', 'input[name*="location_id"], input[name*="api_key"]', this.validateCredentials);
+            $(document).on('input', '#location_id, #api_key', this.markManualCredentials);
 
             // Bulk sync button
             $(document).on('click', '#bulk-sync-products', this.handleBulkSync);
@@ -96,9 +97,18 @@
             $('#kiyoh-connect-results').empty().append(notice);
         },
 
+        markManualCredentials: function () {
+            $('#credential_touch').val('manual');
+        },
+
         handleConnectStart: function (e) {
             e.preventDefault();
+            if (window.kiyohAdminData && window.kiyohAdminData.requiresHttps) {
+                KiyohAdmin.showConnectResult('error', window.kiyohAdminData.httpsMessage || 'Kiyoh-Connect needs an HTTPS shop address. This shop is using HTTP, so Connect cannot return here. Use the Location ID and API key fields, or serve the shop over HTTPS.');
+                return;
+            }
             if (!window.kiyoh_admin_ajax || !window.kiyohAdminData) {
+                KiyohAdmin.showConnectResult('error', 'Kiyoh-Connect could not start.');
                 return;
             }
             var popup = window.open('', 'kiyoh_connect', 'popup=yes,width=520,height=760');
@@ -366,7 +376,7 @@
                 success: function (response) {
                     var sync = (response.data && response.data.sync) ? response.data.sync : {};
                     if (response.success) {
-                        KiyohAdmin.renderRatingSyncStatus(sync);
+                        KiyohAdmin.renderRatingSyncStatus(sync, response.data || {});
                         if (sync.active) {
                             KiyohAdmin.startRatingSyncPolling();
                         }
@@ -376,9 +386,16 @@
                         KiyohAdmin.showRatingSyncResult('error', errData.message || kiyoh_admin_ajax.strings.error);
                     }
                 },
-                error: function () {
-                    KiyohAdmin.setRatingSyncButtonState(false);
-                    KiyohAdmin.showRatingSyncResult('error', kiyoh_admin_ajax.strings.error);
+                error: function (xhr) {
+                    var payload = xhr.responseJSON || {};
+                    var data = payload.data || {};
+                    var message = data.message || payload.message || kiyoh_admin_ajax.strings.error;
+                    if (data.sync) {
+                        KiyohAdmin.renderRatingSyncStatus(data.sync);
+                    } else {
+                        KiyohAdmin.setRatingSyncButtonState(false);
+                    }
+                    KiyohAdmin.showRatingSyncResult('error', message);
                 }
             });
         },
@@ -436,8 +453,9 @@
             });
         },
 
-        renderRatingSyncStatus: function (sync) {
+        renderRatingSyncStatus: function (sync, extras) {
             sync = sync || {};
+            extras = extras || {};
 
             KiyohAdmin.ratingSyncActive = !!sync.active;
 
@@ -464,8 +482,9 @@
             KiyohAdmin.hideRatingSyncProgress();
             KiyohAdmin.setRatingSyncButtonState(false);
 
-            if (sync.status === 'completed' && sync.message) {
-                KiyohAdmin.showRatingSyncResult('success', sync.message);
+            if (sync.status === 'completed') {
+                var doneText = sync.message || extras.message || 'Rating sync completed.';
+                KiyohAdmin.showRatingSyncResult('success', doneText);
             } else if (sync.status === 'failed' && (sync.error || sync.message)) {
                 KiyohAdmin.showRatingSyncResult('error', sync.error || sync.message);
             }

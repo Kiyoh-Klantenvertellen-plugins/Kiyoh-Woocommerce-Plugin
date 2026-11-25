@@ -1,5 +1,45 @@
 # Changelog
 
+## v1.4.6
+
+### Fixed
+- **Product review sync (KP-167, rc7):** “Sync Ratings Now” clears stale queued/running jobs that blocked a new full sync, sends `tenantId` on product-review publication calls, and continues through the product catalogue when the location-wide review fetch fails for a non-auth reason. Rating-sync AJAX and admin JS show JSON errors at HTTP 200 instead of a generic failure.
+- **Product review sync (KP-167, rc6):** Location-wide `/v1/publication/product/review/external` calls send only `locationId` and optional `updatedSince`—no `start` or `limit` without `productCode`/`clusterId` (both trigger `INVALID_PRODUCT_REVIEW_REQUEST` or HTTP 500 from the publication API). Responses that return a bare JSON review list are wrapped before import. Rating-sync admin AJAX returns JSON errors instead of a WordPress HTTP 500 when the sync throws.
+- **Product review sync (KP-167):** Saving a new API key or Location ID clears a stale failed rating-sync notice.
+- **Shop reviews (KP-174):** Star display rounds the 1–10 score to the nearest half star (e.g. 7.6/10 shows four stars). Review text is read from Publication API `reviewContent` (oneliner/opinion). Gutenberg block registers with title, category, and keywords so it appears in the inserter.
+
+### Added
+- **Shop reviews (KP-174):** Fetch location reviews from `GET /v1/publication/review/external` with transient caching. Merchants opt in under WooCommerce → Kiyoh → Reviews. Shortcode `[kiyoh_shop_reviews]`, classic widget, and block. Product review sync is unchanged.
+- **WPML / Polylang invites (KP-139):** When **Auto-detect Language** is on, invitations use order language (`wpml_language` or Polylang) before the existing locale chain. When off, only the fallback language is sent.
+
+### Changed
+- GitHub Actions CI runs `php -l` on PHP 7.4 and 8.2 plus the unit test scripts in `tests/`.
+
+## v1.4.5
+
+### Fixed
+- **Kiyoh Mobile health (KP-169)** sends `User-Agent: Kiyoh-WooCommerce/{version}` on health posts. HTTP 401 and 403 still use a 24-hour publish backoff and drop that backoff when credentials change or Kiyoh-Connect saves again. HTTP 429 behaviour is unchanged.
+- **Invitation retries (KP-137)** — the hourly cron re-sends immediate invites that failed with a temporary Kiyoh or network error, up to three attempts with backoff, then marks them `failed_final`. Permanent API codes are not retried.
+- **MAIL_LIMIT_EXCEED (KP-175)** — merchants see a clear notice on the Invitations tab and in the recent invitation error log when Kiyoh rejects invites because the account mail limit was reached. Dutch and English strings are in the plugin language files.
+
+### Changed
+- **WooCommerce 11.3 (KP-121)** — compatibility headers and `readme.txt` now list `WC tested up to: 11.3` after smoke checks with WooCommerce 11.3 in wp-env.
+
+## v1.4.4
+
+### Fixed
+- **General settings notice (KP-93).** "API credentials are not configured or the plugin is disabled" is shown only when the saved plugin switch is off or the Location ID or API key is empty. A rating-sync failure with that text (or "API credentials not configured") is cleared once the saved settings are complete, so Test API Connection and the notice agree.
+- **Wrong API key (KP-93).** Test API Connection calls the statistics endpoint with the saved key and does not refresh a Kiyoh-Connect key after HTTP 401. A rejected key shows "The API key was rejected." Editing the Location ID or API key and saving sets the status to **Manual connection.**
+- **Disconnect Kiyoh-Connect (KP-93).** A completed Connect sign-in stores `credential_source` as `connect`, so the Disconnect button is shown. Disconnect still clears the Location ID and API key and leaves invitation settings.
+- **HTTP shops (KP-93).** Connect checks the shop URL before opening a popup or redirecting. An HTTP shop shows the HTTPS required message. A manual Location ID and API key can still be saved and tested.
+- **Product review and rating sync (KP-166)** now pages through the Kiyoh publication API (`start` / `limit` on each request) instead of importing only the first page. The incremental cursor (`last_sync_utc`) moves forward only after every page succeeds, and it is set to the sync start time so a partial run cannot skip later pages. Incremental overlap is widened to one hour, and a daily WP-Cron job queues a full rating sync as a safety net.
+- **A bad API key or a failed later page fails the rating sync (KP-167).** HTTP 401/403, a non-JSON body, or an error document is no longer treated as an empty page. The Reviews tab shows an error, `last_sync_utc` in `kiyoh_ratings_sync_state` stays unchanged, and a later successful Sync Ratings Now can import the missed pages. A real empty page still completes successfully.
+
+### Changed
+- Removed **Kiyoh Mobile URL(s)** from WooCommerce → Kiyoh → General (KP-173). Merchants no longer see staging hostnames or tester-only configuration in the admin UI.
+- Shop health reports post to `https://kiyoh-mobile.com` when nothing is configured. Testers aim at other hosts with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter.
+- On upgrade, a previously saved `mobile_urls` value is removed only when it included the Railway staging origin; production-only saved values are unchanged.
+
 ## v1.4.3
 
 ### Fixed

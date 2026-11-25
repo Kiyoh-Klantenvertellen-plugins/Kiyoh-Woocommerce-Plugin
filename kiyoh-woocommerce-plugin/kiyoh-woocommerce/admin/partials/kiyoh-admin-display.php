@@ -25,6 +25,9 @@ if (!is_array($connect_account)) {
     $connect_account = array();
 }
 $credential_source = (isset($settings['general']['credential_source']) && $settings['general']['credential_source'] === 'connect') ? 'connect' : 'manual';
+$saved_location_id = isset($settings['general']['location_id']) ? (string) $settings['general']['location_id'] : '';
+$saved_api_key = isset($settings['general']['api_key']) ? (string) $settings['general']['api_key'] : '';
+$credentials_ready = !empty($settings['general']['enabled']) && $saved_location_id !== '' && $saved_api_key !== '';
 $connect_status = isset($connect_account['status']) ? (string) $connect_account['status'] : '';
 $connect_flash = get_transient('kiyoh_connect_flash');
 if (is_array($connect_flash)) {
@@ -100,6 +103,11 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
             <div class="tab-panel tab-general" <?php echo $active_tab != 'general' ? 'style="display:none;"' : ''; ?>>
                 <h2><?php _e('General Settings', 'kiyoh-woocommerce'); ?></h2>
                 <p><?php _e('Configure your Kiyoh/Klantenvertellen account connection.', 'kiyoh-woocommerce'); ?></p>
+                <?php if (!$credentials_ready): ?>
+                    <div class="notice notice-warning">
+                        <p><?php esc_html_e('API credentials are not configured or the plugin is disabled.', 'kiyoh-woocommerce'); ?></p>
+                    </div>
+                <?php endif; ?>
                 
                 <table class="form-table">
                     <tr>
@@ -136,8 +144,11 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                                         <?php echo esc_html($connect_account['location_name']); ?>
                                     <?php endif; ?>
                                 </p>
+                            <?php elseif ($saved_location_id !== '' && $saved_api_key !== ''): ?>
+                                <p><strong><?php esc_html_e('Manual connection.', 'kiyoh-woocommerce'); ?></strong>
+                                    <?php esc_html_e('This shop uses the Location ID and API key saved on this page.', 'kiyoh-woocommerce'); ?></p>
                             <?php else: ?>
-                                <p><?php esc_html_e('Using a manually entered API key, or not connected yet.', 'kiyoh-woocommerce'); ?></p>
+                                <p><?php esc_html_e('Not connected yet. Connect with Kiyoh-Connect, or save a Location ID and API key for a manual connection.', 'kiyoh-woocommerce'); ?></p>
                             <?php endif; ?>
                             <button type="button" class="button button-primary" id="kiyoh-connect-start">
                                 <?php esc_html_e('Connect with Kiyoh / Klantenvertellen', 'kiyoh-woocommerce'); ?>
@@ -167,18 +178,9 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                             <label for="api_key"><?php _e('API Key', 'kiyoh-woocommerce'); ?></label>
                         </th>
                         <td>
-                            <input type="password" id="api_key" name="kiyoh_woocommerce_settings[general][api_key]" value="<?php echo esc_attr(isset($settings['general']['api_key']) ? $settings['general']['api_key'] : ''); ?>" class="regular-text" />
+                            <input type="password" id="api_key" name="kiyoh_woocommerce_settings[general][api_key]" value="<?php echo esc_attr($saved_api_key); ?>" class="regular-text" />
+                            <input type="hidden" id="credential_touch" name="kiyoh_woocommerce_settings[general][credential_touch]" value="" />
                             <p class="description"><?php esc_html_e('Filled by Connect, or paste a key from an existing install. Editing either field switches this shop back to the manual key.', 'kiyoh-woocommerce'); ?></p>
-                        </td>
-                    </tr>
-
-                    <tr>
-                        <th scope="row">
-                            <label for="mobile_urls"><?php esc_html_e('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'); ?></label>
-                        </th>
-                        <td>
-                            <input type="text" id="mobile_urls" name="kiyoh_woocommerce_settings[general][mobile_urls]" value="<?php echo esc_attr(isset($settings['general']['mobile_urls']) ? $settings['general']['mobile_urls'] : ''); ?>" class="regular-text" />
-                            <p class="description"><?php esc_html_e('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to report only to https://kiyoh-mobile.com. Testers: enter https://kiyohmobileui-staging.up.railway.app.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
                     
@@ -306,6 +308,27 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                                 </label>
                             </fieldset>
                             <p class="description"><?php _e('This applies to ministars and the product Reviews tab. Kiyoh only shows Kiyoh ratings and comments. WooCommerce only shows native store reviews. Both aggregates the star scores and lists both sets of comments.', 'kiyoh-woocommerce'); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">
+                            <label for="shop_reviews_enabled"><?php _e('Shop reviews on your site', 'kiyoh-woocommerce'); ?></label>
+                        </th>
+                        <td>
+                            <input type="hidden" name="kiyoh_woocommerce_settings[frontend][_section]" value="1" />
+                            <label>
+                                <input type="checkbox" id="shop_reviews_enabled" name="kiyoh_woocommerce_settings[frontend][shop_reviews_enabled]" value="1" <?php checked(!empty($settings['frontend']['shop_reviews_enabled'])); ?> />
+                                <?php _e('Fetch and show location (shop) reviews', 'kiyoh-woocommerce'); ?>
+                            </label>
+                            <p class="description"><?php _e('Off by default. When enabled, use the shortcode [kiyoh_shop_reviews limit="5"], the Kiyoh shop reviews widget, or the Kiyoh shop reviews block. Product rating sync is unchanged.', 'kiyoh-woocommerce'); ?></p>
+                            <p>
+                                <label for="shop_reviews_limit"><?php _e('Default number of reviews', 'kiyoh-woocommerce'); ?></label>
+                                <input type="number" class="small-text" id="shop_reviews_limit" name="kiyoh_woocommerce_settings[frontend][shop_reviews_limit]" min="1" max="50" value="<?php echo esc_attr(isset($settings['frontend']['shop_reviews_limit']) ? (int) $settings['frontend']['shop_reviews_limit'] : 5); ?>" />
+                            </p>
+                            <p>
+                                <label for="shop_reviews_cache_ttl"><?php _e('Cache TTL (seconds)', 'kiyoh-woocommerce'); ?></label>
+                                <input type="number" class="small-text" id="shop_reviews_cache_ttl" name="kiyoh_woocommerce_settings[frontend][cache_ttl]" min="300" max="<?php echo esc_attr((string) DAY_IN_SECONDS); ?>" value="<?php echo esc_attr(isset($settings['frontend']['cache_ttl']) ? (int) $settings['frontend']['cache_ttl'] : 3600); ?>" />
+                            </p>
                         </td>
                     </tr>
                     <tr>
@@ -523,7 +546,7 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                         </th>
                         <td>
                             <input type="checkbox" id="language_auto" name="kiyoh_woocommerce_settings[invitations][language_auto]" value="1" <?php checked(!empty($settings['invitations']['language_auto']), true); ?> />
-                            <p class="description"><?php _e('Automatically detect customer language from WordPress locale', 'kiyoh-woocommerce'); ?></p>
+                            <p class="description"><?php esc_html_e('When enabled, invitations use WPML wpml_language or Polylang order language first, then the customer locale, request locale, and site default. When disabled, only the fallback language is used.', 'kiyoh-woocommerce'); ?></p>
                         </td>
                     </tr>
                     
@@ -570,6 +593,9 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
                 if (isset($this) && is_object($this) && method_exists($this, 'render_scheduled_invitations')) {
                     $this->render_scheduled_invitations();
                 }
+                if (isset($this) && is_object($this) && method_exists($this, 'render_invitation_errors')) {
+                    $this->render_invitation_errors();
+                }
                 ?>
             </div>
             
@@ -584,8 +610,10 @@ $callback_origin = class_exists('Kiyoh_Connect') ? Kiyoh_Connect::shop_origin(ho
 
 <script type="text/javascript">
 window.kiyohAdminData = <?php echo wp_json_encode(array(
-    'hasCredentials' => !empty($settings['general']['location_id']) && !empty($settings['general']['api_key']),
+    'hasCredentials' => $saved_location_id !== '' && $saved_api_key !== '',
     'activeTab' => $active_tab,
+    'requiresHttps' => class_exists('Kiyoh_Connect') && Kiyoh_Connect::connect_block_reason(home_url('/')) === 'http',
+    'httpsMessage' => class_exists('Kiyoh_Connect') ? Kiyoh_Connect::validation_message('http') : '',
     'connectStartNonce' => wp_create_nonce('kiyoh_connect_start'),
     'connectDisconnectNonce' => wp_create_nonce('kiyoh_connect_disconnect'),
     'callbackOrigin' => $callback_origin,

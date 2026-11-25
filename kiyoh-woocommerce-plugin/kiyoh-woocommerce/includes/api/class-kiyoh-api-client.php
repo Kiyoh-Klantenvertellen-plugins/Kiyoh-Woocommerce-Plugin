@@ -1,7 +1,13 @@
 <?php
 
 class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
-    
+
+    /** @var int Page size for /publication/product (start + limit). */
+    const PUBLICATION_PAGE_LIMIT = 100;
+
+    /** @var int Safety cap so a misbehaving API cannot loop forever. */
+    const PUBLICATION_MAX_PAGES = 100;
+
     private $base_url;
     private $api_token;
     private $location_id;
@@ -149,27 +155,18 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     
     public function get_reviews($query_params = array()) {
         $endpoint = '/v1/publication/product/review/external';
-        
-        $params = array(
-            'locationId' => $this->location_id
-        );
-        
-        if (!empty($query_params['product_code'])) {
-            $params['productCode'] = $query_params['product_code'];
-        }
-        
-        if (!empty($query_params['cluster_id'])) {
-            $params['clusterId'] = $query_params['cluster_id'];
-        }
-        
-        if (!empty($query_params['updated_since'])) {
-            $params['updatedSince'] = $query_params['updated_since'];
-        }
-        
+        $params = $this->build_review_query_params($query_params);
         $url = $endpoint . '?' . http_build_query($params);
-        
-        $response = $this->make_request('GET', $url);
-        return new Kiyoh_Api_Response($response);
+        $page_result = $this->read_publication_page($this->make_request('GET', $url));
+        if (isset($page_result['error'])) {
+            return $page_result['error'];
+        }
+
+        return new Kiyoh_Api_Response(array(
+            'success' => true,
+            'data' => $this->normalize_review_page_data($page_result['data']),
+            'response_code' => 200,
+        ));
     }
 
     /**
@@ -179,33 +176,147 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
      * @param string $updated_since UTC, e.g. 2020-01-15T01:00:00.000Z
      */
     public function get_updated_products($updated_since) {
-        $params = array(
-            'locationId' => $this->location_id,
-            'updatedSince' => $updated_since
+        $paths = array(
+            '/v1/publication/product',
+            '/v1/publication/product/external',
         );
+        $path_index = 0;
+        $pages = array();
+        $start = 0;
 
-        $query = http_build_query($params);
-        $response = $this->make_request('GET', '/v1/publication/product?' . $query);
+        for ($page = 0; $page < self::PUBLICATION_MAX_PAGES; $page++) {
+            $params = array(
+                'locationId' => $this->location_id,
+                'updatedSince' => $updated_since,
+                'start' => $start,
+                'limit' => self::PUBLICATION_PAGE_LIMIT,
+            );
+            $query = http_build_query($params);
+            $response = $this->make_request('GET', $paths[$path_index] . '?' . $query);
 
-        // Other publication endpoints in this plugin use /external; retry if the
-        // documented path is not available on this platform version.
-        if (!$response['success'] && isset($response['response_code']) && (int) $response['response_code'] === 404) {
-            $response = $this->make_request('GET', '/v1/publication/product/external?' . $query);
+            if (!$response['success'] && $page === 0 && $path_index === 0
+                && isset($response['response_code']) && (int) $response['response_code'] === 404) {
+                $path_index = 1;
+                $response = $this->make_request('GET', $paths[$path_index] . '?' . $query);
+            }
+
+            $page_result = $this->read_publication_page($response);
+            if (isset($page_result['error'])) {
+                return $page_result['error'];
+            }
+
+            $data = $page_result['data'];
+            $count = $page_result['count'];
+            if ($count === 0) {
+                break;
+            }
+
+            $pages[] = $data;
+            if ($count < self::PUBLICATION_PAGE_LIMIT) {
+                break;
+            }
+
+            $start += self::PUBLICATION_PAGE_LIMIT;
         }
 
-        return new Kiyoh_Api_Response($response);
+        return new Kiyoh_Api_Response(array(
+            'success' => true,
+            'data' => $this->merge_publication_pages($pages),
+            'response_code' => 200,
+        ));
     }
     
     public function get_company_stats() {
         $endpoint = '/v1/publication/review/external/location/statistics';
         $params = array('locationId' => $this->location_id);
         $url = $endpoint . '?' . http_build_query($params);
-        
-        $response = $this->make_request('GET', $url);
+
+        // The connection test must judge the saved key. A 401 refresh would
+        // swap in the Connect key and hide a rejected manual key.
+        $response = $this->make_request('GET', $url, null, false);
         return new Kiyoh_Api_Response($response);
     }
+
+    /**
+     * @param int $http_code
+     * @param mixed $data
+     * @return array{ok:bool,message:string}
+     */
+    public static function assess_statistics_payload($http_code, $data) {
+        $http_code = (int) $http_code;
+        $error_code = (is_array($data) && isset($data['errorCode'])) ? (string) $data['errorCode'] : '';
+        if ($http_code === 401 || $http_code === 403 || $error_code === 'ERROR_401' || $error_code === 'UNAUTHORIZED') {
+            return array(
+                'ok' => false,
+                'message' => 'The API key was rejected.',
+            );
+        }
+        if ($http_code >= 200 && $http_code < 300 && is_array($data) && (array_key_exists('numberReviews', $data) || array_key_exists('averageRating', $data))) {
+            return array(
+                'ok' => true,
+                'message' => 'API connection successful',
+            );
+        }
+        return array(
+            'ok' => false,
+            'message' => 'API connection failed.',
+        );
+    }
+
+    /**
+     * Shop (location) reviews and aggregates from the Review Publishing API.
+     *
+     * @see https://ekomi01.atlassian.net/wiki/spaces/KB/pages/3130327053/KV+Kiyoh+Publishing+API
+     *
+     * @param array $query_params limit, orderBy, sortOrder, updatedSince, locale, etc.
+     */
+    public function get_shop_reviews($query_params = array()) {
+        $endpoint = '/v1/publication/review/external';
+
+        $params = array(
+            'locationId' => $this->location_id,
+            'tenantId' => $this->get_tenant_id(),
+        );
+
+        if (!empty($query_params['limit'])) {
+            $params['limit'] = (int) $query_params['limit'];
+        }
+
+        if (!empty($query_params['order_by'])) {
+            $params['orderBy'] = $query_params['order_by'];
+        }
+
+        if (!empty($query_params['sort_order'])) {
+            $params['sortOrder'] = $query_params['sort_order'];
+        }
+
+        if (!empty($query_params['updated_since'])) {
+            $params['updatedSince'] = $query_params['updated_since'];
+        }
+
+        if (!empty($query_params['locale'])) {
+            $params['locale'] = $query_params['locale'];
+        }
+
+        $url = $endpoint . '?' . http_build_query($params);
+        $response = $this->make_request('GET', $url);
+
+        return new Kiyoh_Api_Response($response);
+    }
+
+    private function get_tenant_id() {
+        $account = get_option('kiyoh_connect_account', array());
+        if (is_array($account) && !empty($account['tenant_id'])) {
+            $tenant = (int) $account['tenant_id'];
+            if ($tenant === 98 || $tenant === 99) {
+                return $tenant;
+            }
+        }
+
+        return $this->platform === 'klantenvertellen' ? 99 : 98;
+    }
     
-    private function make_request($method, $endpoint, $data = null) {
+    private function make_request($method, $endpoint, $data = null, $refresh_on_unauthorized = true) {
         $url = $this->base_url . $endpoint;
         
         $args = array(
@@ -245,7 +356,7 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         $response_code = wp_remote_retrieve_response_code($response);
         $response_body = wp_remote_retrieve_body($response);
 
-        if ((int) $response_code === 401 && !$this->connect_refreshed) {
+        if ((int) $response_code === 401 && $refresh_on_unauthorized && !$this->connect_refreshed) {
             $this->connect_refreshed = true;
             if ($this->try_refresh_connect_credentials()) {
                 return $this->make_request($method, $endpoint, $data);
@@ -300,12 +411,251 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         }
     }
     
+    /**
+     * A 2xx body is a page only when it is JSON for a publication document.
+     * Auth errors, HTML, and error documents must not end the loop as "no rows".
+     *
+     * @param array $response make_request result.
+     * @return array{error?:Kiyoh_Api_Response,data?:mixed,count?:int}
+     */
+    private function read_publication_page($response) {
+        if (empty($response['success'])) {
+            return array('error' => new Kiyoh_Api_Response($response));
+        }
+
+        $data = isset($response['data']) ? $response['data'] : null;
+        $rejection = $this->publication_page_rejection($data);
+        if ($rejection !== null) {
+            return array('error' => new Kiyoh_Api_Response(array(
+                'success' => false,
+                'error' => $rejection['error'],
+                'error_code' => $rejection['error_code'],
+                'response_code' => isset($response['response_code']) ? $response['response_code'] : null,
+            )));
+        }
+
+        return array(
+            'data' => $data,
+            'count' => $this->count_publication_page_items($data),
+        );
+    }
+
+    /**
+     * @param mixed $data Decoded 2xx body.
+     * @return array{error:string,error_code:string}|null
+     */
+    private function publication_page_rejection($data) {
+        if (!is_array($data)) {
+            return array(
+                'error' => 'Kiyoh returned a response that was not a review page.',
+                'error_code' => 'invalid_publication_page',
+            );
+        }
+
+        if ($data === array()
+            || array_key_exists('reviews', $data)
+            || array_key_exists('clusters', $data)
+            || isset($data['locationProduct'])
+            || isset($data['averageRating'])
+            || isset($data['numberReviews'])
+            || isset($data['productCode'])
+            || isset($data['clusterId'])
+            || self::is_list_array($data)) {
+            return null;
+        }
+
+        $error_code = '';
+        if (isset($data['errorCode']) && is_string($data['errorCode']) && $data['errorCode'] !== '') {
+            $error_code = $data['errorCode'];
+        } elseif (!empty($data['detailedError'][0]['errorCode']) && is_string($data['detailedError'][0]['errorCode'])) {
+            $error_code = $data['detailedError'][0]['errorCode'];
+        } elseif (isset($data['error']) && is_string($data['error']) && $data['error'] !== '') {
+            $error_code = $data['error'];
+        }
+
+        $message = '';
+        if (isset($data['message']) && is_string($data['message'])) {
+            $message = $data['message'];
+        }
+
+        $status = 0;
+        if (isset($data['status']) && is_numeric($data['status'])) {
+            $status = (int) $data['status'];
+        }
+
+        $has_error_key = $error_code !== ''
+            || !empty($data['detailedError'])
+            || !empty($data['errors'])
+            || (isset($data['error']) && $data['error'] !== '' && $data['error'] !== array());
+
+        if (!$has_error_key && $message === '' && $status < 400 && (!array_key_exists('success', $data) || $data['success'] !== false)) {
+            return null;
+        }
+
+        if ($message === '') {
+            $message = 'Kiyoh returned an error instead of a review page.';
+        }
+
+        return array(
+            'error' => $message,
+            'error_code' => $error_code !== '' ? $error_code : 'api_error',
+        );
+    }
+
+    /**
+     * PHP 7.4-compatible list check (array_is_list() is PHP 8.1+).
+     *
+     * @param array $data
+     * @return bool
+     */
+    private static function is_list_array($data) {
+        if (!is_array($data)) {
+            return false;
+        }
+        if (function_exists('array_is_list')) {
+            return array_is_list($data);
+        }
+        $i = 0;
+        foreach ($data as $key => $_) {
+            if ($key !== $i) {
+                return false;
+            }
+            $i++;
+        }
+        return true;
+    }
+
+    /**
+     * Query params for /v1/publication/product/review/external.
+     *
+     * Location-wide calls send only locationId (and optional updatedSince). The API rejects
+     * start and limit without productCode or clusterId (INVALID_PRODUCT_REVIEW_REQUEST).
+     * Scoped lookups send only their filter fields (no limit on our side).
+     *
+     * @param array $query_params
+     * @return array
+     */
+    private function build_review_query_params($query_params) {
+        $params = array(
+            'locationId' => $this->location_id,
+            'tenantId' => $this->get_tenant_id(),
+        );
+
+        if (!empty($query_params['product_code'])) {
+            $params['productCode'] = $query_params['product_code'];
+        }
+
+        if (!empty($query_params['cluster_id'])) {
+            $params['clusterId'] = $query_params['cluster_id'];
+        }
+
+        if (!empty($query_params['updated_since'])) {
+            $params['updatedSince'] = $query_params['updated_since'];
+        }
+
+        return $params;
+    }
+
+    /**
+     * @param mixed $data
+     * @return int
+     */
+    private function count_publication_page_items($data) {
+        if (!is_array($data)) {
+            return 0;
+        }
+
+        if (!empty($data['clusters']) && is_array($data['clusters'])) {
+            return count($data['clusters']);
+        }
+
+        if (!empty($data['reviews']) && is_array($data['reviews'])) {
+            return count($data['reviews']);
+        }
+
+        if (isset($data['locationProduct']) || isset($data['averageRating']) || isset($data['productCode'])) {
+            return 1;
+        }
+
+        if (self::is_list_array($data)) {
+            return count($data);
+        }
+
+        return 0;
+    }
+
+    /**
+     * Wrap a top-level JSON list of review rows as { reviews: [...] }.
+     *
+     * @param mixed $data
+     * @return array
+     */
+    private function normalize_review_page_data($data) {
+        if (self::is_list_array($data)) {
+            return array('reviews' => $data);
+        }
+
+        return is_array($data) ? $data : array();
+    }
+
+    /**
+     * @param array<int, array> $pages
+     * @return array
+     */
+    private function merge_publication_pages(array $pages) {
+        if (empty($pages)) {
+            return array();
+        }
+
+        if (count($pages) === 1) {
+            return $pages[0];
+        }
+
+        $merged_clusters = array();
+        $merged_reviews = array();
+
+        foreach ($pages as $data) {
+            if (!is_array($data)) {
+                continue;
+            }
+
+            if (!empty($data['clusters']) && is_array($data['clusters'])) {
+                $merged_clusters = array_merge($merged_clusters, $data['clusters']);
+                continue;
+            }
+
+            if (!empty($data['reviews']) && is_array($data['reviews']) && empty($data['productCode']) && empty($data['clusterId'])) {
+                $merged_reviews = array_merge($merged_reviews, $data['reviews']);
+                continue;
+            }
+
+            $merged_clusters[] = $data;
+        }
+
+        if (!empty($merged_clusters) && !empty($merged_reviews)) {
+            return array(
+                'clusters' => $merged_clusters,
+                'reviews' => $merged_reviews,
+            );
+        }
+
+        if (!empty($merged_clusters)) {
+            return array('clusters' => $merged_clusters);
+        }
+
+        if (!empty($merged_reviews)) {
+            return array('reviews' => $merged_reviews);
+        }
+
+        return array();
+    }
+
     private function get_timeout($endpoint) {
         if (strpos($endpoint, '/bulk') !== false) {
             return 30;
         }
 
-        if (strpos($endpoint, '/publication/product') !== false) {
+        if (strpos($endpoint, '/publication/product') !== false || strpos($endpoint, '/publication/review/external') !== false) {
             return 30;
         }
         

@@ -220,14 +220,14 @@ class Kiyoh_Invitation_Manager {
             error_log("Kiyoh Invitation: Shop invitation failed for order {$order->get_id()}: " . $result['error_code']);
         }
 
-        $this->save_invitation_record($order, $result['success'] ? 'sent' : 'error');
+        $this->save_invitation_record($order, $result['success'] ? 'sent' : 'error', $result);
     }
 
     private function send_product_invitation_with_details($order, $product_codes, $product_invite_flag) {
         $invitation_data = $this->build_invitation_data($order, $product_codes);
         $result = $this->send_invitation_request($invitation_data, $product_invite_flag);
         
-        $this->save_invitation_record($order, $result['success'] ? 'sent' : 'error');
+        $this->save_invitation_record($order, $result['success'] ? 'sent' : 'error', $result);
         
         return $result;
     }
@@ -239,7 +239,7 @@ class Kiyoh_Invitation_Manager {
 
     private function build_invitation_data($order, $product_codes) {
         $delay_days = $this->get_invitation_delay();
-        $language = $this->detect_customer_language($order);
+        $language = $this->resolve_invitation_language($order);
 
         $first_name = $order->get_billing_first_name();
         $last_name = $order->get_billing_last_name();
@@ -568,88 +568,28 @@ class Kiyoh_Invitation_Manager {
         return in_array($error_code, $product_sync_errors);
     }
 
-    private function detect_customer_language($order) {
+    private function resolve_invitation_language($order) {
         $fallback_language = $this->get_fallback_language();
 
-        try {
-            // Try user-specific locale for logged-in customers
-            $customer_id = $order->get_customer_id();
-            if ($customer_id) {
-                $user_locale = get_user_locale($customer_id);
-                if ($user_locale) {
-                    return $this->map_wordpress_locale_to_kiyoh_language($user_locale, $fallback_language);
-                }
-            }
-
-            // Try current request locale (WordPress 5.0+, context-aware)
-            if (function_exists('determine_locale')) {
-                $request_locale = determine_locale();
-                if ($request_locale) {
-                    return $this->map_wordpress_locale_to_kiyoh_language($request_locale, $fallback_language);
-                }
-            }
-
-            // Fallback to site default locale
-            $site_locale = get_locale();
-            if ($site_locale) {
-                return $this->map_wordpress_locale_to_kiyoh_language($site_locale, $fallback_language);
-            }
-        } catch (Exception $e) {
-            error_log("Kiyoh Invitation: Could not detect language from order, using fallback: " . $e->getMessage());
+        if (!$this->is_language_auto_enabled()) {
+            return Kiyoh_Language::sanitize_kiyoh_language($fallback_language, 'en');
         }
 
-        return $fallback_language;
+        if (!class_exists('Kiyoh_Language')) {
+            require_once dirname(__DIR__) . '/helpers/class-kiyoh-language.php';
+        }
+
+        try {
+            return Kiyoh_Language::resolve_invitation_language($order, $fallback_language);
+        } catch (Exception $e) {
+            error_log('Kiyoh Invitation: Could not detect language from order, using fallback: ' . $e->getMessage());
+        }
+
+        return Kiyoh_Language::sanitize_kiyoh_language($fallback_language, 'en');
     }
 
-    private function map_wordpress_locale_to_kiyoh_language($wp_locale, $fallback = 'en') {
-        // Complete locale mapping matching Magento plugin
-        $locale_to_kiyoh_map = array(
-            'nl_NL' => 'nl',
-            'fr_FR' => 'fr', 'fr_CA' => 'fr',
-            'de_DE' => 'de', 'de_AT' => 'de', 'de_CH' => 'de',
-            'en_US' => 'en', 'en_GB' => 'en', 'en_AU' => 'en', 'en_CA' => 'en', 'en_NZ' => 'en',
-            'da_DK' => 'da',
-            'hu_HU' => 'hu',
-            'bg_BG' => 'bg',
-            'ro_RO' => 'ro',
-            'hr_HR' => 'hr',
-            'ja_JP' => 'ja',
-            'es_ES' => 'es', 'es_AR' => 'es', 'es_CL' => 'es', 'es_CO' => 'es', 'es_MX' => 'es', 'es_PE' => 'es', 'es_VE' => 'es',
-            'it_IT' => 'it', 'it_CH' => 'it',
-            'pt_PT' => 'pt',
-            'tr_TR' => 'tr',
-            'nb_NO' => 'no', 'nn_NO' => 'no',
-            'sv_SE' => 'sv',
-            'fi_FI' => 'fi',
-            'pt_BR' => 'pt',
-            'pl_PL' => 'pl',
-            'sl_SI' => 'sl',
-            'zh_Hans_CN' => 'zh', 'zh_Hant_HK' => 'zh', 'zh_Hant_TW' => 'zh',
-            'zh_CN' => 'zh', 'zh_TW' => 'zh', // WordPress variants
-            'ru_RU' => 'ru',
-            'el_GR' => 'gr',
-            'cs_CZ' => 'cs',
-            'et_EE' => 'et',
-            'lt_LT' => 'lt',
-            'lv_LV' => 'lv',
-            'sk_SK' => 'sk'
-        );
-
-        if (isset($locale_to_kiyoh_map[$wp_locale])) {
-            return $locale_to_kiyoh_map[$wp_locale];
-        }
-
-        // Extract language code and check if supported
-        $language_code = substr($wp_locale, 0, 2);
-        $supported_kiyoh_languages = array_unique(array_values($locale_to_kiyoh_map));
-        
-        if (in_array($language_code, $supported_kiyoh_languages)) {
-            return $language_code;
-        }
-
-        error_log("Kiyoh Invitation: Unsupported language detected, using fallback: wp_locale={$wp_locale}, language_code={$language_code}, fallback={$fallback}");
-
-        return $fallback;
+    private function is_language_auto_enabled() {
+        return !empty($this->settings['invitations']['language_auto']);
     }
 
     private function get_fallback_language() {
@@ -657,29 +597,155 @@ class Kiyoh_Invitation_Manager {
                $this->settings['invitations']['fallback_language'] : 'en';
     }
 
-    private function save_invitation_record($order, $status) {
+    /**
+     * @param WC_Order $order
+     * @param string   $status sent|error
+     * @param array|null $result API outcome when known
+     */
+    private function save_invitation_record($order, $status, $result = null) {
         if ($this->invitation_record_id) {
-            $this->update_invitation_status($this->invitation_record_id, $status);
+            $this->persist_invitation_outcome((int) $this->invitation_record_id, $order, $status, $result);
             return;
         }
 
         global $wpdb;
 
         $table_name = $wpdb->prefix . 'kiyoh_invitations';
-        
+        $failures = $status === 'error' ? 1 : 0;
+        $payload = $this->build_invitation_row_payload($order, $status, $failures, $result);
+
+        $wpdb->insert(
+            $table_name,
+            $payload['data'],
+            $payload['format']
+        );
+    }
+
+    /**
+     * @param int      $invitation_id
+     * @param WC_Order $order
+     * @param string   $status
+     * @param array|null $result
+     */
+    private function persist_invitation_outcome($invitation_id, $order, $status, $result = null) {
+        global $wpdb;
+
+        $table_name = $wpdb->prefix . 'kiyoh_invitations';
+        $failures = 0;
+        $existing = $wpdb->get_row($wpdb->prepare(
+            "SELECT retry_attempts FROM {$table_name} WHERE id = %d",
+            $invitation_id
+        ));
+        if ($existing) {
+            $failures = (int) $existing->retry_attempts;
+        }
+        if ($status === 'error') {
+            $failures++;
+        }
+
+        $payload = $this->build_invitation_row_payload($order, $status, $failures, $result);
+        unset($payload['data']['created_at']);
+        $format_map = array(
+            'order_id' => '%d',
+            'customer_email' => '%s',
+            'invitation_type' => '%s',
+            'status' => '%s',
+            'error_code' => '%s',
+            'retry_attempts' => '%d',
+            'retry_at' => '%s',
+            'sent_at' => '%s',
+            'response_data' => '%s',
+        );
+        $payload['format'] = array();
+        foreach ($payload['data'] as $key => $value) {
+            if (isset($format_map[$key])) {
+                $payload['format'][] = $format_map[$key];
+            }
+        }
+
+        $wpdb->update(
+            $table_name,
+            $payload['data'],
+            array('id' => $invitation_id),
+            $payload['format'],
+            array('%d')
+        );
+    }
+
+    /**
+     * @param WC_Order   $order
+     * @param string     $status
+     * @param int        $failure_count Failed send attempts on this row (1 = first failure).
+     * @param array|null $result
+     * @return array{data: array, format: string[]}
+     */
+    private function build_invitation_row_payload($order, $status, $failure_count, $result = null) {
+        $error_code = '';
+        $http_status = null;
+        $response_data = array();
+
+        if (is_array($result)) {
+            if (!empty($result['error_code'])) {
+                $error_code = strtoupper(trim((string) $result['error_code']));
+            }
+            if (array_key_exists('http_status', $result)) {
+                $http_status = $result['http_status'];
+            }
+            if (!empty($result['message'])) {
+                $response_data['message'] = (string) $result['message'];
+            }
+            if ($error_code !== '') {
+                $response_data['error_code'] = $error_code;
+            }
+        }
+
+        $final_status = $status;
+        $retry_at = null;
+
+        if ($status === 'error') {
+            $resolved = Kiyoh_Invitation_Errors::resolve_failure_status(
+                $error_code,
+                $http_status,
+                $failure_count,
+                time()
+            );
+            $final_status = $resolved['status'];
+            $failure_count = $resolved['failure_count'];
+            if ($resolved['retry_at'] !== null) {
+                $retry_at = gmdate('Y-m-d H:i:s', (int) $resolved['retry_at']);
+            }
+        }
+
         $data = array(
             'order_id' => $order->get_id(),
             'customer_email' => $order->get_billing_email(),
             'invitation_type' => $this->get_invitation_type(),
-            'status' => $status,
-            'created_at' => current_time('mysql')
+            'status' => $final_status,
+            'error_code' => $error_code !== '' ? $error_code : null,
+            'retry_attempts' => max(0, (int) $failure_count),
+            'retry_at' => $retry_at,
+            'created_at' => current_time('mysql'),
         );
 
-        if ($status === 'sent') {
+        $format = array('%d', '%s', '%s', '%s', '%s', '%d', '%s', '%s');
+
+        if ($final_status === 'sent') {
             $data['sent_at'] = current_time('mysql');
+            $data['retry_at'] = null;
+            $data['error_code'] = null;
+            $data['retry_attempts'] = 0;
+            $format[] = '%s';
         }
 
-        $wpdb->insert($table_name, $data);
+        if (!empty($response_data)) {
+            $data['response_data'] = wp_json_encode($response_data);
+            $format[] = '%s';
+        }
+
+        return array(
+            'data' => $data,
+            'format' => $format,
+        );
     }
 
     private function get_trigger_statuses() {
@@ -749,6 +815,7 @@ class Kiyoh_Invitation_Manager {
                 COUNT(*) as total_invitations,
                 SUM(CASE WHEN status = 'sent' THEN 1 ELSE 0 END) as sent,
                 SUM(CASE WHEN status = 'error' THEN 1 ELSE 0 END) as errors,
+                SUM(CASE WHEN status = 'failed_final' THEN 1 ELSE 0 END) as failed_final,
                 MAX(sent_at) as last_sent_time
             FROM {$table_name}
         ");
@@ -774,44 +841,152 @@ class Kiyoh_Invitation_Manager {
     }
 
     public function retry_failed_invitations($limit = 10) {
-        global $wpdb;
+        return $this->process_errored_invitations($limit);
+    }
 
-        $table_name = $wpdb->prefix . 'kiyoh_invitations';
-        
-        $failed_invitations = $wpdb->get_results($wpdb->prepare(
-            "SELECT order_id FROM {$table_name} 
-             WHERE status = 'error' 
-             AND created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
-             AND scheduled_for IS NULL
-             ORDER BY created_at DESC 
-             LIMIT %d",
-            $limit
-        ));
-
+    /**
+     * Hourly cron: resend immediate invites that failed with a retryable error.
+     *
+     * @param int $limit
+     * @return array{attempted: int, successful: int, failed: int}
+     */
+    public function process_errored_invitations($limit = 20) {
         $results = array(
             'attempted' => 0,
             'successful' => 0,
-            'failed' => 0
+            'failed' => 0,
         );
 
-        foreach ($failed_invitations as $invitation) {
-            $order = wc_get_order($invitation->order_id);
-            if (!$order) {
-                continue;
-            }
+        if (!$this->is_invitation_enabled()) {
+            return $results;
+        }
 
+        global $wpdb;
+        $table = $wpdb->prefix . 'kiyoh_invitations';
+        if (!self::invitations_table_exists($table)) {
+            return $results;
+        }
+
+        $limit = max(1, min(50, (int) $limit));
+        $now = gmdate('Y-m-d H:i:s');
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, order_id FROM {$table}
+             WHERE status = 'error'
+             AND scheduled_for IS NULL
+             AND retry_attempts < %d
+             AND (retry_at IS NULL OR retry_at <= %s)
+             ORDER BY retry_at ASC, id ASC
+             LIMIT %d",
+            Kiyoh_Invitation_Errors::MAX_RETRY_ATTEMPTS,
+            $now,
+            $limit
+        ));
+
+        foreach ($rows as $row) {
             $results['attempted']++;
-            
-            if ($this->send_invitation($order)) {
+            $sent = $this->resend_errored_invitation((int) $row->id, (int) $row->order_id);
+            if ($sent) {
                 $results['successful']++;
             } else {
                 $results['failed']++;
             }
-
-            sleep(1);
         }
 
         return $results;
+    }
+
+    /**
+     * @param int $invitation_id
+     * @param int $order_id
+     * @return bool
+     */
+    private function resend_errored_invitation($invitation_id, $order_id) {
+        if (!$this->acquire_order_lock($order_id)) {
+            error_log("Kiyoh Invitation: Could not lock order {$order_id} for errored invite retry");
+            return false;
+        }
+
+        try {
+            $order = function_exists('wc_get_order') ? wc_get_order($order_id) : null;
+            if (!$order || !is_a($order, 'WC_Order')) {
+                $this->update_invitation_status($invitation_id, 'failed_final', 'order_missing');
+                return false;
+            }
+
+            if (!$this->should_send_invitation($order)) {
+                $this->update_invitation_status($invitation_id, 'failed_final', 'ineligible');
+                return false;
+            }
+
+            $this->invitation_record_id = $invitation_id;
+            $this->process_order_invitations($order);
+
+            global $wpdb;
+            $table = $wpdb->prefix . 'kiyoh_invitations';
+            $status = (string) $wpdb->get_var($wpdb->prepare(
+                "SELECT status FROM {$table} WHERE id = %d",
+                $invitation_id
+            ));
+
+            return $status === 'sent';
+        } catch (Exception $e) {
+            error_log("Kiyoh Invitation: Retry for invitation {$invitation_id} failed: " . $e->getMessage());
+            return false;
+        } finally {
+            $this->invitation_record_id = null;
+            $this->release_order_lock($order_id);
+        }
+    }
+
+    /**
+     * Recent invite failures for the settings log (immediate sends only).
+     *
+     * @param int $limit
+     * @return array
+     */
+    public static function get_recent_invitation_errors($limit = 30) {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'kiyoh_invitations';
+        if (!self::invitations_table_exists($table)) {
+            return array();
+        }
+
+        $limit = max(1, min(100, (int) $limit));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, order_id, customer_email, status, error_code, retry_attempts, retry_at, created_at, response_data
+             FROM {$table}
+             WHERE scheduled_for IS NULL
+             AND status IN ('error', 'failed_final')
+             ORDER BY created_at DESC
+             LIMIT %d",
+            $limit
+        ));
+
+        return is_array($rows) ? $rows : array();
+    }
+
+    /**
+     * @param int $days
+     * @return bool
+     */
+    public static function has_recent_mail_limit_errors($days = 7) {
+        global $wpdb;
+
+        $table = $wpdb->prefix . 'kiyoh_invitations';
+        if (!self::invitations_table_exists($table)) {
+            return false;
+        }
+
+        $count = $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table}
+             WHERE error_code = %s
+             AND created_at > DATE_SUB(UTC_TIMESTAMP(), INTERVAL %d DAY)",
+            'MAIL_LIMIT_EXCEED',
+            max(1, (int) $days)
+        ));
+
+        return (int) $count > 0;
     }
 
     /**
