@@ -30,7 +30,7 @@ function expect_false($actual, $message) {
 
 $now = 1761206400; // 2026-10-23 08:00:00 UTC
 $production = 'https://kiyoh-mobile.com';
-$staging = 'https://kiyohmobileui-staging.up.railway.app';
+$staging = Kiyoh_Mobile_Health::STAGING_ORIGIN;
 
 expect_same(
     array($production),
@@ -42,13 +42,18 @@ expect_same(
     Kiyoh_Mobile_Health::DEFAULT_URLS,
     'the default never includes staging'
 );
-expect_same(array($staging), Kiyoh_Mobile_Health::resolve_base_urls($staging, ''), 'testers can set staging in the field');
+expect_same(array($staging), Kiyoh_Mobile_Health::resolve_base_urls('', $staging), 'testers can set staging via KIYOH_MOBILE_URLS');
 expect_same(array($production), Kiyoh_Mobile_Health::resolve_base_urls('  ', $production), 'blank setting keeps the constant');
 expect_same(
     array($production, $staging),
     Kiyoh_Mobile_Health::resolve_base_urls($production . ', ' . $staging, $production),
-    'a non-blank setting overrides the constant'
+    'a legacy saved setting overrides the constant'
 );
+
+$with_staging = array('general' => array('mobile_urls' => $staging));
+expect_false(isset(Kiyoh_Mobile_Health::maybe_clear_staging_mobile_urls($with_staging)['general']['mobile_urls']), 'upgrade drops mobile_urls that contain staging');
+$production_only = array('general' => array('mobile_urls' => $production));
+expect_same($production, Kiyoh_Mobile_Health::maybe_clear_staging_mobile_urls($production_only)['general']['mobile_urls'], 'upgrade keeps mobile_urls without staging');
 expect_same(
     array($staging),
     Kiyoh_Mobile_Health::apply_url_override(array($production), $staging),

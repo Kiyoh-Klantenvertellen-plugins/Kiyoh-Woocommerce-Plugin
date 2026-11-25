@@ -201,19 +201,6 @@ class Kiyoh_Admin {
                 'description' => __('Your API key from your Kiyoh/Klantenvertellen account', 'kiyoh-woocommerce')
             )
         );
-
-        add_settings_field(
-            'mobile_urls',
-            __('Kiyoh Mobile URL(s)', 'kiyoh-woocommerce'),
-            array($this, 'text_field_callback'),
-            'kiyoh-settings',
-            'kiyoh_general_section',
-            array(
-                'name' => 'kiyoh_woocommerce_settings[general][mobile_urls]',
-                'value' => $this->get_option('general', 'mobile_urls', ''),
-                'description' => __('Comma-separated Kiyoh Mobile base URLs for shop health reports. Leave blank to report only to https://kiyoh-mobile.com. Testers: enter https://kiyohmobileui-staging.up.railway.app.', 'kiyoh-woocommerce')
-            )
-        );
     }
 
     private function register_product_sync_fields() {
@@ -528,14 +515,6 @@ class Kiyoh_Admin {
 
         if (isset($input['general'])) {
             $existing_settings = get_option('kiyoh_woocommerce_settings', array());
-            $previous_urls = '';
-            if (is_array($existing_settings) && isset($existing_settings['general']['mobile_urls'])) {
-                $previous_urls = $existing_settings['general']['mobile_urls'];
-            }
-            $mobile_urls = $previous_urls;
-            if (is_array($input['general']) && array_key_exists('mobile_urls', $input['general'])) {
-                $mobile_urls = sanitize_text_field($input['general']['mobile_urls']);
-            }
 
             $new_location = sanitize_text_field($input['general']['location_id'] ?? '');
             $new_key = sanitize_text_field($input['general']['api_key'] ?? '');
@@ -571,7 +550,6 @@ class Kiyoh_Admin {
                 'platform' => $platform,
                 'location_id' => $new_location,
                 'api_key' => $new_key,
-                'mobile_urls' => $mobile_urls,
                 'credential_source' => $source,
             );
         }

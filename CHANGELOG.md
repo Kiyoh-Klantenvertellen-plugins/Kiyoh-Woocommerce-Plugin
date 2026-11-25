@@ -10,6 +10,11 @@
 - **Product review and rating sync (KP-166)** now pages through the Kiyoh publication API (`start` / `limit` on each request) instead of importing only the first page. The incremental cursor (`last_sync_utc`) moves forward only after every page succeeds, and it is set to the sync start time so a partial run cannot skip later pages. Incremental overlap is widened to one hour, and a daily WP-Cron job queues a full rating sync as a safety net.
 - **A bad API key or a failed later page fails the rating sync (KP-167).** HTTP 401/403, a non-JSON body, or an error document is no longer treated as an empty page. The Reviews tab shows an error, `last_sync_utc` in `kiyoh_ratings_sync_state` stays unchanged, and a later successful Sync Ratings Now can import the missed pages. A real empty page still completes successfully.
 
+### Changed
+- Removed **Kiyoh Mobile URL(s)** from WooCommerce → Kiyoh → General (KP-173). Merchants no longer see staging hostnames or tester-only configuration in the admin UI.
+- Shop health reports post to `https://kiyoh-mobile.com` when nothing is configured. Testers aim at other hosts with the `KIYOH_MOBILE_URLS` constant (for example in `wp-config.php`) or the `kiyoh_mobile_urls` filter.
+- On upgrade, a previously saved `mobile_urls` value is removed only when it included the Railway staging origin; production-only saved values are unchanged.
+
 ## v1.4.3
 
 ### Fixed

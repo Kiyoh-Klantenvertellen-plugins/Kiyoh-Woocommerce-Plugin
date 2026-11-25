@@ -8,6 +8,49 @@
 class Kiyoh_Activator {
 
     /**
+     * Run data migrations when the plugin version in the database is older than the code.
+     */
+    public static function maybe_upgrade() {
+        if (!function_exists('get_option')) {
+            return;
+        }
+
+        $stored_version = get_option('kiyoh_woocommerce_version', '0');
+        if (!is_string($stored_version) || $stored_version === '') {
+            $stored_version = '0';
+        }
+
+        if (version_compare($stored_version, KIYOH_WOOCOMMERCE_VERSION, '>=')) {
+            return;
+        }
+
+        if (version_compare($stored_version, '1.4.4', '<')) {
+            self::upgrade_1_4_4_remove_staging_mobile_urls();
+        }
+
+        update_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
+    }
+
+    /**
+     * Drop saved mobile_urls when they pointed at the Railway staging host (merchant field removed).
+     */
+    private static function upgrade_1_4_4_remove_staging_mobile_urls() {
+        if (!class_exists('Kiyoh_Mobile_Health')) {
+            require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-mobile-health.php';
+        }
+
+        $settings = get_option('kiyoh_woocommerce_settings', array());
+        if (!is_array($settings)) {
+            return;
+        }
+
+        $updated = Kiyoh_Mobile_Health::maybe_clear_staging_mobile_urls($settings);
+        if ($updated !== $settings) {
+            update_option('kiyoh_woocommerce_settings', $updated);
+        }
+    }
+
+    /**
      * Plugin activation handler
      */
     public static function activate() {
@@ -202,8 +245,8 @@ class Kiyoh_Activator {
             add_option('kiyoh_woocommerce_settings', $default_settings);
         }
 
-        // Set plugin version
-        add_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
+        // Set plugin version (upgrade path may bump this on plugins_loaded)
+        update_option('kiyoh_woocommerce_version', KIYOH_WOOCOMMERCE_VERSION);
     }
 
     /**

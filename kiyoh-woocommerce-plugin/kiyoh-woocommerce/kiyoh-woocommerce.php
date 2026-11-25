@@ -32,9 +32,8 @@ define('KIYOH_WOOCOMMERCE_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('KIYOH_WOOCOMMERCE_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 /**
- * Comma-separated Kiyoh Mobile base URLs for shop health reports.
- * A non-blank "Kiyoh Mobile URL(s)" setting overrides this. The
- * kiyoh_mobile_urls filter overrides both. Blank reports to production and staging.
+ * Comma-separated Kiyoh Mobile base URLs for shop health reports (testers only).
+ * The kiyoh_mobile_urls filter overrides this. When unset, health posts to production only.
  */
 if (!defined('KIYOH_MOBILE_URLS')) {
     define('KIYOH_MOBILE_URLS', 'https://kiyoh-mobile.com');
@@ -120,6 +119,9 @@ function kiyoh_woocommerce_init() {
         add_action('admin_notices', 'kiyoh_woocommerce_missing_wc_notice');
         return;
     }
+
+    require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-activator.php';
+    Kiyoh_Activator::maybe_upgrade();
     
     // Load the core plugin class
     require_once KIYOH_WOOCOMMERCE_PLUGIN_DIR . 'includes/class-kiyoh-plugin.php';

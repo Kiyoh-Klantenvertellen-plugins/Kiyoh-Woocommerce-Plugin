@@ -10,8 +10,9 @@ class Kiyoh_Mobile_Health {
 
     const PLATFORM = 'woocommerce';
     const HEALTH_PATH = '/api/integrations/health';
-    /** Production and staging. A blank setting uses this list, same as the other plugins. */
+    /** Production-only default when nothing is configured. */
     const DEFAULT_URLS = 'https://kiyoh-mobile.com';
+    const STAGING_ORIGIN = 'https://kiyohmobileui-staging.up.railway.app';
     const HEADER_PUBLICATION = 'X-Publication-Api-Token';
     const HEADER_LOCATION = 'X-Location-Id';
     const CRON_HOOK = 'kiyoh_report_mobile_health';
@@ -121,7 +122,7 @@ class Kiyoh_Mobile_Health {
     }
 
     /**
-     * Setting wins when it is non-blank. Otherwise the constant, otherwise production and staging.
+     * Legacy saved setting wins when non-blank, else constant, else production only.
      *
      * @param mixed $setting_value
      * @param mixed $constant_value
@@ -137,6 +138,29 @@ class Kiyoh_Mobile_Health {
         }
 
         return self::parse_urls($raw);
+    }
+
+    /**
+     * Remove general.mobile_urls from saved settings when the list includes staging (v1.4.4 upgrade).
+     *
+     * @param array $settings
+     * @return array
+     */
+    public static function maybe_clear_staging_mobile_urls(array $settings) {
+        if (!isset($settings['general']['mobile_urls'])) {
+            return $settings;
+        }
+        $raw = $settings['general']['mobile_urls'];
+        if (!is_string($raw) || trim($raw) === '') {
+            return $settings;
+        }
+        $parsed = self::parse_urls($raw);
+        if (!in_array(self::STAGING_ORIGIN, $parsed, true)) {
+            return $settings;
+        }
+        unset($settings['general']['mobile_urls']);
+
+        return $settings;
     }
 
     /**

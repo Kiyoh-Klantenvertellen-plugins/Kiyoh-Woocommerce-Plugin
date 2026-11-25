@@ -43,6 +43,7 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 * Disconnect Kiyoh-Connect is available after Connect. On an HTTP shop, Connect shows that HTTPS is required and does not redirect. (KP-93)
 * Product review and rating sync pages through the publication API instead of importing only the first page (KP-166).
 * A rejected API key or a failed later publication page fails the rating sync and leaves last_sync_utc unchanged (KP-167).
+* Removed Kiyoh Mobile URL(s) from WooCommerce → Kiyoh → General (KP-173). Reports default to https://kiyoh-mobile.com; testers use KIYOH_MOBILE_URLS or the kiyoh_mobile_urls filter. Upgrade clears a saved value only when it included the staging host.
 
 = 1.4.3 =
 * Kiyoh Mobile health backs off on failed posts (credential rejection on 401/403, exponential backoff on other errors) and coalesces sends with a 10-minute minimum between opportunistic posts.
@@ -51,7 +52,7 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 * Connect with Kiyoh closes the sign-in popup and refreshes the original WooCommerce → Kiyoh tab to Connected. If that tab is no longer the opener, the same window opens the settings page.
 
 = 1.4.1 =
-* A blank Kiyoh Mobile URL(s) field reports only to https://kiyoh-mobile.com. Live shops never report to staging; testers enter https://kiyohmobileui-staging.up.railway.app in the field.
+* Kiyoh Mobile URL(s) help text clarified production-only default for merchants (field removed in 1.4.4).
 * The health report includes webhooks.lastReceivedAt (null). Connect sends the report after the location and invite key are saved and marks the connection ok.
 
 = 1.4.0 =
@@ -62,7 +63,7 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 
 = 1.3.0 =
 * Shop health is reported to Kiyoh Mobile (connection, invites, product sync, ministars).
-* Kiyoh Mobile URL(s) on WooCommerce → Kiyoh → General accepts a comma-separated list. Blank uses https://kiyoh-mobile.com (changed in 1.4.1; staging was included in 1.3.0–1.4.0).
+* Health base URLs were configurable in admin until 1.4.4; default is https://kiyoh-mobile.com.
 * Reports are sent on settings save, connection test, invite sent or failed, product sync, and a daily cron. Unchanged reports are sent again after 24 hours.
 * The health request uses a 2-second timeout, honors HTTP 429, and does not block invitations or checkout when it fails.
 
