@@ -149,6 +149,19 @@ function kiyoh_review_page($count) {
     return array('reviews' => $reviews);
 }
 
+function kiyoh_cluster_page($count) {
+    $clusters = array();
+    for ($i = 0; $i < $count; $i++) {
+        $clusters[] = array(
+            'clusterId' => 'c' . $i,
+            'averageRating' => 8,
+            'numberReviews' => 1,
+            'locationProduct' => array(array('productCode' => 'SKU-' . $i)),
+        );
+    }
+    return array('clusters' => $clusters);
+}
+
 function kiyoh_reset_shop() {
     global $wp_options, $wp_transients, $kiyoh_test_skus;
     $wp_transients = array();
@@ -259,7 +272,7 @@ expect_same('Unauthorized', $error_document->get_error(), 'the error document me
 kiyoh_script_http(array(kiyoh_http(200, array('reviews' => array()))));
 $empty_reviews = kiyoh_client()->get_reviews();
 expect_true($empty_reviews->is_success(), 'a review page with an empty reviews array succeeds');
-expect_same(array(), $empty_reviews->get_data(), 'an empty review page contributes no rows');
+expect_same(array('reviews' => array()), $empty_reviews->get_data(), 'an empty review page contributes no rows');
 
 kiyoh_script_http(array(kiyoh_http(200, array())));
 $empty_list = kiyoh_client()->get_reviews();
@@ -277,30 +290,44 @@ $fallback = kiyoh_client()->get_updated_products('2000-01-01T00:00:00.000Z');
 expect_true($fallback->is_success(), 'a 404 on the first product path still accepts an empty fallback page');
 expect_same(2, count($GLOBALS['kiyoh_http_seen']), 'the external product path is tried after a 404');
 
-kiyoh_script_http(array(
-    kiyoh_http(200, kiyoh_review_page(100)),
-    kiyoh_http(200, array('reviews' => array())),
-));
-$two_pages = kiyoh_client()->get_reviews();
-expect_true($two_pages->is_success(), 'a later empty page ends a successful fetch');
-expect_same(100, count($two_pages->get_data()['reviews']), 'reviews from the first page are kept when the next page is empty');
-expect_true(isset($GLOBALS['kiyoh_http_seen'][1]) && strpos($GLOBALS['kiyoh_http_seen'][1], 'start=100') !== false, 'the second page requests start=100');
+kiyoh_script_http(array(kiyoh_http(200, kiyoh_review_page(118))));
+$bulk_reviews = kiyoh_client()->get_reviews();
+expect_true($bulk_reviews->is_success(), 'a location-wide review fetch succeeds in one request');
+expect_same(118, count($bulk_reviews->get_data()['reviews']), 'all reviews arrive in the bulk response');
+expect_same(1, count($GLOBALS['kiyoh_http_seen']), 'location-wide review sync does not paginate with start');
+expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'limit=250') !== false, 'location-wide review sync requests limit=250');
+expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'start=') === false, 'product review requests must not send start');
+
+kiyoh_script_http(array(kiyoh_http(200, kiyoh_review_page(100))));
+$scoped_reviews = kiyoh_client()->get_reviews(array('product_code' => 'SKU-1'));
+expect_true($scoped_reviews->is_success(), 'a product-scoped review fetch succeeds');
+expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'productCode=SKU-1') !== false, 'product review filters by productCode');
+expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'limit=') === false, 'product-scoped review sync does not send limit');
 
 kiyoh_script_http(array(
-    kiyoh_http(200, kiyoh_review_page(100)),
+    kiyoh_http(200, kiyoh_cluster_page(100)),
+    kiyoh_http(200, array('clusters' => array())),
+));
+$two_pages = kiyoh_client()->get_updated_products('2000-01-01T00:00:00.000Z');
+expect_true($two_pages->is_success(), 'a later empty product page ends a successful fetch');
+expect_same(100, count($two_pages->get_data()['clusters']), 'clusters from the first page are kept when the next page is empty');
+expect_true(isset($GLOBALS['kiyoh_http_seen'][1]) && strpos($GLOBALS['kiyoh_http_seen'][1], 'start=100') !== false, 'the second product page requests start=100');
+
+kiyoh_script_http(array(
+    kiyoh_http(200, kiyoh_cluster_page(100)),
     kiyoh_http(200, '<html>bad page</html>'),
 ));
-$bad_page = kiyoh_client()->get_reviews();
-expect_false($bad_page->is_success(), 'a non-JSON later page fails the fetch');
-expect_true($bad_page->get_data() === null, 'a failed later page is not returned as a partial success');
+$bad_page = kiyoh_client()->get_updated_products('2000-01-01T00:00:00.000Z');
+expect_false($bad_page->is_success(), 'a non-JSON later product page fails the fetch');
+expect_true($bad_page->get_data() === null, 'a failed later product page is not returned as a partial success');
 
 kiyoh_script_http(array(
-    kiyoh_http(200, kiyoh_review_page(100)),
+    kiyoh_http(200, kiyoh_cluster_page(100)),
     kiyoh_http(500, array('message' => 'publication page failed')),
 ));
-$server_error = kiyoh_client()->get_reviews();
-expect_false($server_error->is_success(), 'HTTP 500 on a later page fails the fetch');
-expect_same(500, (int) $server_error->get_response_code(), 'the later-page status is kept');
+$server_error = kiyoh_client()->get_updated_products('2000-01-01T00:00:00.000Z');
+expect_false($server_error->is_success(), 'HTTP 500 on a later product page fails the fetch');
+expect_same(500, (int) $server_error->get_response_code(), 'the later product-page status is kept');
 
 kiyoh_reset_shop();
 $GLOBALS['kiyoh_test_skus'] = array('SKU-PAGE-2');
@@ -334,15 +361,30 @@ expect_true(!empty($recovered_state['last_result']['success']), 'the successful 
 
 kiyoh_reset_shop();
 kiyoh_script_http(array(
-    kiyoh_http(200, kiyoh_review_page(100)),
+    kiyoh_http(200, array('reviews' => array())),
+    kiyoh_http(200, kiyoh_cluster_page(100)),
     kiyoh_http(500, array('message' => 'publication page failed')),
-    kiyoh_http(200, array('clusters' => array())),
 ));
 $before_page = get_option('kiyoh_ratings_sync_state');
 $page_status = kiyoh_run_full_sync();
-expect_same('failed', $page_status['status'], 'a failed later page fails the rating sync');
+expect_same('failed', $page_status['status'], 'a failed later product page fails the rating sync');
 expect_true($page_status['error'] !== '', 'the Reviews tab notice explains the failed page');
-expect_same($before_page, get_option('kiyoh_ratings_sync_state'), 'a failed later page does not move last_sync_utc');
+expect_same($before_page, get_option('kiyoh_ratings_sync_state'), 'a failed later product page does not move last_sync_utc');
+
+$wp_options['kiyoh_ratings_sync_job'] = array(
+    'status' => 'failed',
+    'error' => 'Kiyoh rejected the API key, so the rating sync failed and the previous sync time was kept. Check the API key, then run Sync Ratings Now again. (HTTP 401)',
+    'updated_at' => time(),
+);
+$old_settings = $wp_options['kiyoh_woocommerce_settings'];
+$new_settings = $old_settings;
+$new_settings['general']['api_key'] = 'fixed-key';
+$manager = new Kiyoh_Rating_Manager();
+$manager->handle_settings_update($old_settings, $new_settings);
+$cleared_job = get_option('kiyoh_ratings_sync_job');
+expect_same('idle', $cleared_job['status'], 'saving a new API key clears a failed rating-sync job');
+expect_same('', $cleared_job['error'], 'saving a new API key clears the stale sync error message');
+$wp_options['kiyoh_woocommerce_settings'] = $new_settings;
 
 kiyoh_reset_shop();
 kiyoh_script_http(array(

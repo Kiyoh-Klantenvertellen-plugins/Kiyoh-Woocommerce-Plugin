@@ -2,8 +2,11 @@
 
 class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
 
-    /** @var int Items per publication API page (Kiyoh uses start + limit query params). */
+    /** @var int Page size for /publication/product (start + limit). */
     const PUBLICATION_PAGE_LIMIT = 100;
+
+    /** @var int Bulk fetch for /publication/product/review/external (limit only; no start offset). */
+    const PUBLICATION_REVIEW_FETCH_LIMIT = 250;
 
     /** @var int Safety cap so a misbehaving API cannot loop forever. */
     const PUBLICATION_MAX_PAGES = 100;
@@ -155,34 +158,16 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     
     public function get_reviews($query_params = array()) {
         $endpoint = '/v1/publication/product/review/external';
-        $pages = array();
-        $start = 0;
-
-        for ($page = 0; $page < self::PUBLICATION_MAX_PAGES; $page++) {
-            $params = $this->build_review_query_params($query_params, $start, self::PUBLICATION_PAGE_LIMIT);
-            $url = $endpoint . '?' . http_build_query($params);
-            $page_result = $this->read_publication_page($this->make_request('GET', $url));
-            if (isset($page_result['error'])) {
-                return $page_result['error'];
-            }
-
-            $data = $page_result['data'];
-            $count = $page_result['count'];
-            if ($count === 0) {
-                break;
-            }
-
-            $pages[] = $data;
-            if ($count < self::PUBLICATION_PAGE_LIMIT) {
-                break;
-            }
-
-            $start += self::PUBLICATION_PAGE_LIMIT;
+        $params = $this->build_review_query_params($query_params);
+        $url = $endpoint . '?' . http_build_query($params);
+        $page_result = $this->read_publication_page($this->make_request('GET', $url));
+        if (isset($page_result['error'])) {
+            return $page_result['error'];
         }
 
         return new Kiyoh_Api_Response(array(
             'success' => true,
-            'data' => $this->merge_publication_pages($pages),
+            'data' => $page_result['data'],
             'response_code' => 200,
         ));
     }
@@ -544,17 +529,23 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     }
 
     /**
+     * Query params for /v1/publication/product/review/external.
+     *
+     * The publication API accepts limit on this route but rejects start (INVALID_PRODUCT_REVIEW_REQUEST).
+     * Location-wide sync uses a high limit; product/cluster lookups send only their filter fields.
+     *
      * @param array $query_params
-     * @param int   $start
-     * @param int   $limit
      * @return array
      */
-    private function build_review_query_params($query_params, $start, $limit) {
+    private function build_review_query_params($query_params) {
         $params = array(
             'locationId' => $this->location_id,
-            'start' => max(0, (int) $start),
-            'limit' => max(1, (int) $limit),
         );
+
+        $scoped = !empty($query_params['product_code']) || !empty($query_params['cluster_id']);
+        if (!$scoped) {
+            $params['limit'] = self::PUBLICATION_REVIEW_FETCH_LIMIT;
+        }
 
         if (!empty($query_params['product_code'])) {
             $params['productCode'] = $query_params['product_code'];

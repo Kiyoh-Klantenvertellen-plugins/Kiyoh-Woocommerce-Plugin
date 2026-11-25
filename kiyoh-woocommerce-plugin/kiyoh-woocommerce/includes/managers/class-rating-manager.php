@@ -149,6 +149,50 @@ class Kiyoh_Rating_Manager {
             || strpos($error, 'API not configured') !== false;
     }
 
+    /**
+     * Clear a failed background job after the publication API key or location id changes.
+     */
+    public function clear_persisted_sync_errors() {
+        $job = $this->get_job();
+        if (empty($job) || !is_array($job)) {
+            return;
+        }
+
+        if (!isset($job['status']) || $job['status'] !== 'failed') {
+            return;
+        }
+
+        $job['status'] = 'idle';
+        $job['error'] = '';
+        $job['message'] = '';
+        $job['updated_at'] = time();
+        $this->save_job($job);
+    }
+
+    /**
+     * @param mixed $old_value
+     * @param mixed $new_value
+     * @return bool
+     */
+    private function publication_credentials_changed($old_value, $new_value) {
+        $old_general = is_array($old_value) && isset($old_value['general']) && is_array($old_value['general'])
+            ? $old_value['general']
+            : array();
+        $new_general = is_array($new_value) && isset($new_value['general']) && is_array($new_value['general'])
+            ? $new_value['general']
+            : array();
+
+        foreach (array('api_key', 'location_id', 'platform') as $field) {
+            $old = isset($old_general[$field]) ? (string) $old_general[$field] : '';
+            $new = isset($new_general[$field]) ? (string) $new_general[$field] : '';
+            if ($old !== $new) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public function is_import_enabled() {
         return in_array($this->get_rating_source(), array('kiyoh', 'both'), true);
     }
@@ -381,6 +425,10 @@ class Kiyoh_Rating_Manager {
 
     public function handle_settings_update($old_value, $new_value) {
         $this->settings = is_array($new_value) ? $new_value : array();
+
+        if ($this->publication_credentials_changed($old_value, $new_value)) {
+            $this->clear_persisted_sync_errors();
+        }
 
         $was_override = $this->settings_uses_kiyoh_ratings($old_value);
         $now_override = $this->settings_uses_kiyoh_ratings($new_value);
@@ -862,6 +910,7 @@ class Kiyoh_Rating_Manager {
 
         $job['results'] = $results;
         $job['status'] = 'completed';
+        $job['error'] = '';
         $job['phase'] = 'done';
         $job['processed'] = max((int) $job['processed'], (int) $job['total']);
         $job['message'] = sprintf(

@@ -3,6 +3,7 @@
 ## v1.4.6
 
 ### Fixed
+- **Product review sync (KP-167):** Location-wide `/v1/publication/product/review/external` calls no longer send `start` (the API returns `INVALID_PRODUCT_REVIEW_REQUEST`). Bulk fetches use `limit=250` in one request; cluster pagination stays on `/v1/publication/product`. Saving a new API key or Location ID clears a stale failed rating-sync notice.
 - **Shop reviews (KP-174):** Star display rounds the 1–10 score to the nearest half star (e.g. 7.6/10 shows four stars). Review text is read from Publication API `reviewContent` (oneliner/opinion). Gutenberg block registers with title, category, and keywords so it appears in the inserter.
 
 ### Added
