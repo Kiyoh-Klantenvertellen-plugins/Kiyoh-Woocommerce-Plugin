@@ -5,9 +5,6 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     /** @var int Page size for /publication/product (start + limit). */
     const PUBLICATION_PAGE_LIMIT = 100;
 
-    /** @var int Bulk fetch for /publication/product/review/external (limit only; no start offset). */
-    const PUBLICATION_REVIEW_FETCH_LIMIT = 250;
-
     /** @var int Safety cap so a misbehaving API cannot loop forever. */
     const PUBLICATION_MAX_PAGES = 100;
 
@@ -167,7 +164,7 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
 
         return new Kiyoh_Api_Response(array(
             'success' => true,
-            'data' => $page_result['data'],
+            'data' => $this->normalize_review_page_data($page_result['data']),
             'response_code' => 200,
         ));
     }
@@ -531,8 +528,9 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     /**
      * Query params for /v1/publication/product/review/external.
      *
-     * The publication API accepts limit on this route but rejects start (INVALID_PRODUCT_REVIEW_REQUEST).
-     * Location-wide sync uses a high limit; product/cluster lookups send only their filter fields.
+     * Location-wide calls send only locationId (and optional updatedSince). The API rejects
+     * start and limit without productCode or clusterId (INVALID_PRODUCT_REVIEW_REQUEST).
+     * Scoped lookups send only their filter fields (no limit on our side).
      *
      * @param array $query_params
      * @return array
@@ -541,11 +539,6 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
         $params = array(
             'locationId' => $this->location_id,
         );
-
-        $scoped = !empty($query_params['product_code']) || !empty($query_params['cluster_id']);
-        if (!$scoped) {
-            $params['limit'] = self::PUBLICATION_REVIEW_FETCH_LIMIT;
-        }
 
         if (!empty($query_params['product_code'])) {
             $params['productCode'] = $query_params['product_code'];
@@ -583,7 +576,25 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
             return 1;
         }
 
+        if (self::is_list_array($data)) {
+            return count($data);
+        }
+
         return 0;
+    }
+
+    /**
+     * Wrap a top-level JSON list of review rows as { reviews: [...] }.
+     *
+     * @param mixed $data
+     * @return array
+     */
+    private function normalize_review_page_data($data) {
+        if (self::is_list_array($data)) {
+            return array('reviews' => $data);
+        }
+
+        return is_array($data) ? $data : array();
     }
 
     /**

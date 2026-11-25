@@ -660,7 +660,7 @@ class Kiyoh_Rating_Manager {
                 $this->finalize_job($job);
                 $this->save_job($job);
             }
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             $job['status'] = 'failed';
             $job['error'] = $e->getMessage();
             $job['updated_at'] = time();
@@ -1218,6 +1218,14 @@ class Kiyoh_Rating_Manager {
      * @return string
      */
     private function publication_fetch_error($response) {
+        $error_code = $response->get_error_code();
+        if ($error_code === 'INVALID_PRODUCT_REVIEW_REQUEST') {
+            return __(
+                'Kiyoh rejected the product review request. The sync kept the previous sync time. Run Sync Ratings Now again after checking your API credentials and Location ID.',
+                'kiyoh-woocommerce'
+            );
+        }
+
         $code = (int) $response->get_response_code();
         if ($code === 401 || $code === 403) {
             return sprintf(

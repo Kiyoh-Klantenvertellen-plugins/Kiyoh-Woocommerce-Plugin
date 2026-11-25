@@ -3,7 +3,8 @@
 ## v1.4.6
 
 ### Fixed
-- **Product review sync (KP-167):** Location-wide `/v1/publication/product/review/external` calls no longer send `start` (the API returns `INVALID_PRODUCT_REVIEW_REQUEST`). Bulk fetches use `limit=250` in one request; cluster pagination stays on `/v1/publication/product`. Saving a new API key or Location ID clears a stale failed rating-sync notice.
+- **Product review sync (KP-167, rc6):** Location-wide `/v1/publication/product/review/external` calls send only `locationId` and optional `updatedSince`—no `start` or `limit` without `productCode`/`clusterId` (both trigger `INVALID_PRODUCT_REVIEW_REQUEST` or HTTP 500 from the publication API). Responses that return a bare JSON review list are wrapped before import. Rating-sync admin AJAX returns JSON errors instead of a WordPress HTTP 500 when the sync throws.
+- **Product review sync (KP-167):** Saving a new API key or Location ID clears a stale failed rating-sync notice.
 - **Shop reviews (KP-174):** Star display rounds the 1–10 score to the nearest half star (e.g. 7.6/10 shows four stars). Review text is read from Publication API `reviewContent` (oneliner/opinion). Gutenberg block registers with title, category, and keywords so it appears in the inserter.
 
 ### Added

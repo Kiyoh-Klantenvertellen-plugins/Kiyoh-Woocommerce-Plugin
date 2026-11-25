@@ -295,8 +295,21 @@ $bulk_reviews = kiyoh_client()->get_reviews();
 expect_true($bulk_reviews->is_success(), 'a location-wide review fetch succeeds in one request');
 expect_same(118, count($bulk_reviews->get_data()['reviews']), 'all reviews arrive in the bulk response');
 expect_same(1, count($GLOBALS['kiyoh_http_seen']), 'location-wide review sync does not paginate with start');
-expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'limit=250') !== false, 'location-wide review sync requests limit=250');
+expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'limit=') === false, 'location-wide review sync does not send limit');
 expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'start=') === false, 'product review requests must not send start');
+
+$flat_reviews = array();
+for ($i = 0; $i < 3; $i++) {
+    $flat_reviews[] = array(
+        'reviewId' => 'flat-' . $i,
+        'productCode' => 'SKU-FLAT-' . $i,
+        'rating' => 8,
+    );
+}
+kiyoh_script_http(array(kiyoh_http(200, $flat_reviews)));
+$flat_response = kiyoh_client()->get_reviews();
+expect_true($flat_response->is_success(), 'a top-level review list succeeds');
+expect_same(3, count($flat_response->get_data()['reviews']), 'a top-level review list is wrapped for the sync layer');
 
 kiyoh_script_http(array(kiyoh_http(200, kiyoh_review_page(100))));
 $scoped_reviews = kiyoh_client()->get_reviews(array('product_code' => 'SKU-1'));

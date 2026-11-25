@@ -761,22 +761,26 @@ class Kiyoh_Admin {
             wp_die('Insufficient permissions');
         }
 
-        $rating_manager = new Kiyoh_Rating_Manager();
-        $queued = $rating_manager->queue_full_sync();
+        try {
+            $rating_manager = new Kiyoh_Rating_Manager();
+            $queued = $rating_manager->queue_full_sync();
 
-        if (isset($queued['status']) && $queued['status'] === 'failed' && !empty($queued['error'])) {
-            wp_send_json_error(array(
-                'message' => $queued['error'],
-                'sync' => $rating_manager->get_public_sync_status()
+            if (isset($queued['status']) && $queued['status'] === 'failed' && !empty($queued['error'])) {
+                wp_send_json_error(array(
+                    'message' => $queued['error'],
+                    'sync' => $rating_manager->get_public_sync_status()
+                ));
+            }
+
+            $status = $rating_manager->process_job_chunk();
+
+            wp_send_json_success(array(
+                'message' => isset($status['message']) ? $status['message'] : '',
+                'sync' => $status
             ));
+        } catch (Throwable $e) {
+            $this->send_rating_sync_ajax_failure($e);
         }
-
-        $status = $rating_manager->process_job_chunk();
-
-        wp_send_json_success(array(
-            'message' => isset($status['message']) ? $status['message'] : '',
-            'sync' => $status
-        ));
     }
 
     /**
@@ -792,15 +796,38 @@ class Kiyoh_Admin {
             wp_die('Insufficient permissions');
         }
 
-        $rating_manager = new Kiyoh_Rating_Manager();
-        $status = $rating_manager->get_public_sync_status();
+        try {
+            $rating_manager = new Kiyoh_Rating_Manager();
+            $status = $rating_manager->get_public_sync_status();
 
-        if (!empty($status['active'])) {
-            $status = $rating_manager->process_job_chunk();
+            if (!empty($status['active'])) {
+                $status = $rating_manager->process_job_chunk();
+            }
+
+            wp_send_json_success(array(
+                'sync' => $status
+            ));
+        } catch (Throwable $e) {
+            $this->send_rating_sync_ajax_failure($e);
         }
+    }
 
-        wp_send_json_success(array(
-            'sync' => $status
+    /**
+     * @param Throwable $e
+     */
+    private function send_rating_sync_ajax_failure($e) {
+        error_log('Kiyoh Rating Sync AJAX: ' . $e->getMessage());
+        wp_send_json_error(array(
+            'message' => sprintf(
+                /* translators: %s: exception message */
+                __('Product rating sync failed: %s', 'kiyoh-woocommerce'),
+                $e->getMessage()
+            ),
+            'sync' => array(
+                'status' => 'failed',
+                'active' => false,
+                'error' => $e->getMessage(),
+            ),
         ));
     }
 
