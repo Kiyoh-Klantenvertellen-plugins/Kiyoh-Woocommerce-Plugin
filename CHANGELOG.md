@@ -7,6 +7,8 @@
 - **Wrong API key (KP-93).** Test API Connection calls the statistics endpoint with the saved key and does not refresh a Kiyoh-Connect key after HTTP 401. A rejected key shows "The API key was rejected." Editing the Location ID or API key and saving sets the status to **Manual connection.**
 - **Disconnect Kiyoh-Connect (KP-93).** A completed Connect sign-in stores `credential_source` as `connect`, so the Disconnect button is shown. Disconnect still clears the Location ID and API key and leaves invitation settings.
 - **HTTP shops (KP-93).** Connect checks the shop URL before opening a popup or redirecting. An HTTP shop shows the HTTPS required message. A manual Location ID and API key can still be saved and tested.
+- **Product review and rating sync (KP-166)** now pages through the Kiyoh publication API (`start` / `limit` on each request) instead of importing only the first page. The incremental cursor (`last_sync_utc`) moves forward only after every page succeeds, and it is set to the sync start time so a partial run cannot skip later pages. Incremental overlap is widened to one hour, and a daily WP-Cron job queues a full rating sync as a safety net.
+- **A bad API key or a failed later page fails the rating sync (KP-167).** HTTP 401/403, a non-JSON body, or an error document is no longer treated as an empty page. The Reviews tab shows an error, `last_sync_utc` in `kiyoh_ratings_sync_state` stays unchanged, and a later successful Sync Ratings Now can import the missed pages. A real empty page still completes successfully.
 
 ## v1.4.3
 

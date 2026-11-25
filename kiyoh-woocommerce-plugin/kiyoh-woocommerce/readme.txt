@@ -4,7 +4,7 @@ Tags: woocommerce, reviews, kiyoh, klantenvertellen
 Requires at least: 5.8
 Tested up to: 7.1.3
 Requires PHP: 8.2
-Stable tag: 1.4.3
+Stable tag: 1.4.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 WC requires at least: 5.0
@@ -41,6 +41,8 @@ Compatible with High-Performance Order Storage and the Cart and Checkout blocks.
 * The General tab notice follows the saved plugin switch, Location ID, and API key. A stale "credentials not configured" rating-sync error is cleared once those are saved (KP-93).
 * Test API Connection reports a rejected API key instead of a successful connection. Editing the key and saving shows **Manual connection.** (KP-93)
 * Disconnect Kiyoh-Connect is available after Connect. On an HTTP shop, Connect shows that HTTPS is required and does not redirect. (KP-93)
+* Product review and rating sync pages through the publication API instead of importing only the first page (KP-166).
+* A rejected API key or a failed later publication page fails the rating sync and leaves last_sync_utc unchanged (KP-167).
 
 = 1.4.3 =
 * Kiyoh Mobile health backs off on failed posts (credential rejection on 401/403, exponential backoff on other errors) and coalesces sends with a 10-minute minimum between opportunistic posts.
