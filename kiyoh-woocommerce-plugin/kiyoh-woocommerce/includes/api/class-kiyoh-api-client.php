@@ -538,6 +538,7 @@ class Kiyoh_Api_Client implements Kiyoh_Api_Interface {
     private function build_review_query_params($query_params) {
         $params = array(
             'locationId' => $this->location_id,
+            'tenantId' => $this->get_tenant_id(),
         );
 
         if (!empty($query_params['product_code'])) {

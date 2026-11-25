@@ -769,7 +769,7 @@ class Kiyoh_Admin {
                 wp_send_json_error(array(
                     'message' => $queued['error'],
                     'sync' => $rating_manager->get_public_sync_status()
-                ));
+                ), 200);
             }
 
             $status = $rating_manager->process_job_chunk();
@@ -818,17 +818,13 @@ class Kiyoh_Admin {
     private function send_rating_sync_ajax_failure($e) {
         error_log('Kiyoh Rating Sync AJAX: ' . $e->getMessage());
         wp_send_json_error(array(
-            'message' => sprintf(
-                /* translators: %s: exception message */
-                __('Product rating sync failed: %s', 'kiyoh-woocommerce'),
-                $e->getMessage()
-            ),
+            'message' => __('Product rating sync failed: ', 'kiyoh-woocommerce') . $e->getMessage(),
             'sync' => array(
                 'status' => 'failed',
                 'active' => false,
                 'error' => $e->getMessage(),
             ),
-        ));
+        ), 200);
     }
 
     /**

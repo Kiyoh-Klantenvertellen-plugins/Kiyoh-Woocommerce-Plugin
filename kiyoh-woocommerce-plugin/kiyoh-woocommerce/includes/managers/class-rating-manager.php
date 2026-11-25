@@ -468,7 +468,37 @@ class Kiyoh_Rating_Manager {
      * Queue a full rating sync and start the first background chunk.
      */
     public function queue_full_sync() {
+        $this->prepare_manual_full_sync_queue();
         return $this->queue_sync(true);
+    }
+
+    /**
+     * Merchants expect Sync Ratings Now to start work. Stale queued/running jobs from
+     * an interrupted request block queue_sync() until they age out; clear them first.
+     */
+    private function prepare_manual_full_sync_queue() {
+        delete_transient(self::LOCK_TRANSIENT);
+
+        $job = $this->get_job();
+        if (!$this->job_is_active($job)) {
+            return;
+        }
+
+        $updated = isset($job['updated_at']) ? (int) $job['updated_at'] : 0;
+        $processed = isset($job['processed']) ? (int) $job['processed'] : 0;
+        $age = $updated > 0 ? time() - $updated : self::JOB_STALE_SECONDS + 1;
+
+        // A very fresh job that already moved past bootstrap should keep batching.
+        if ($age <= 45 && $processed > 0) {
+            return;
+        }
+
+        $this->save_job(array(
+            'status' => 'idle',
+            'error' => '',
+            'message' => '',
+            'updated_at' => time(),
+        ));
     }
 
     /**
@@ -519,9 +549,14 @@ class Kiyoh_Rating_Manager {
         $review_query = $full ? array() : array('updated_since' => $updated_since);
         $review_response = $client->get_reviews($review_query);
         if (!$review_response->is_success()) {
-            return $this->abort_sync_results($results, $review_response);
+            if ($full && !$this->response_is_auth_failure($review_response)) {
+                error_log('Kiyoh Rating Sync: Location-wide review fetch skipped: ' . $this->publication_fetch_error($review_response));
+            } else {
+                return $this->abort_sync_results($results, $review_response);
+            }
+        } else {
+            $this->apply_publication_payload($review_response->get_data(), $results);
         }
-        $this->apply_publication_payload($review_response->get_data(), $results);
 
         $update_response = $client->get_updated_products($updated_since);
         if (!$update_response->is_success()) {
@@ -761,10 +796,15 @@ class Kiyoh_Rating_Manager {
         $review_query = $full ? array() : array('updated_since' => $updated_since);
         $review_response = $client->get_reviews($review_query);
         if (!$review_response->is_success()) {
-            $this->fail_job_fetch($job, $review_response);
-            return;
+            if ($full && !$this->response_is_auth_failure($review_response)) {
+                error_log('Kiyoh Rating Sync: Location-wide review fetch skipped: ' . $this->publication_fetch_error($review_response));
+            } else {
+                $this->fail_job_fetch($job, $review_response);
+                return;
+            }
+        } else {
+            $this->apply_publication_payload($review_response->get_data(), $results);
         }
-        $this->apply_publication_payload($review_response->get_data(), $results);
 
         $update_response = $client->get_updated_products($updated_since);
         if (!$update_response->is_success()) {

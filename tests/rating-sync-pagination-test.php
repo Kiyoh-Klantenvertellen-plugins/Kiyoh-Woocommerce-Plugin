@@ -297,6 +297,7 @@ expect_same(118, count($bulk_reviews->get_data()['reviews']), 'all reviews arriv
 expect_same(1, count($GLOBALS['kiyoh_http_seen']), 'location-wide review sync does not paginate with start');
 expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'limit=') === false, 'location-wide review sync does not send limit');
 expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'start=') === false, 'product review requests must not send start');
+expect_true(strpos($GLOBALS['kiyoh_http_seen'][0], 'tenantId=98') !== false, 'location-wide review sync sends tenantId');
 
 $flat_reviews = array();
 for ($i = 0; $i < 3; $i++) {
@@ -445,6 +446,41 @@ $catalog_auth = kiyoh_run_full_sync();
 expect_same('failed', $catalog_auth['status'], 'a rejected API key during the catalogue pass fails the sync');
 expect_true(strpos($catalog_auth['error'], 'API key') !== false, 'the catalogue auth failure is shown on the Reviews tab');
 expect_same($before_catalog_auth, get_option('kiyoh_ratings_sync_state'), 'a catalogue auth failure does not move last_sync_utc');
+
+kiyoh_reset_shop();
+$wp_options['kiyoh_ratings_sync_job'] = array(
+    'status' => 'running',
+    'phase' => 'bootstrap',
+    'processed' => 0,
+    'updated_at' => time() - 120,
+);
+kiyoh_script_http(array(
+    kiyoh_http(200, array('reviews' => array(array(
+        'reviewId' => 'stale-reset',
+        'productCode' => 'SKU-STALE',
+        'rating' => 8,
+    )))),
+    kiyoh_http(200, array('clusters' => array())),
+));
+$stale_manager = new Kiyoh_Rating_Manager();
+$stale_manager->queue_full_sync();
+$reset_job = get_option('kiyoh_ratings_sync_job');
+expect_same('queued', $reset_job['status'], 'Sync Ratings Now replaces a stale running job');
+expect_true(!empty($reset_job['full']), 'the replacement job is a full sync');
+$stale_status = $stale_manager->process_job_chunk();
+expect_same('completed', $stale_status['status'], 'a fresh manual full sync completes after reset');
+
+kiyoh_reset_shop();
+$GLOBALS['kiyoh_test_skus'] = array('SKU-FALLBACK');
+kiyoh_script_http(array(
+    kiyoh_http(400, array('message' => 'bad request', 'errorCode' => 'INVALID_PRODUCT_REVIEW_REQUEST')),
+    kiyoh_http(200, array('clusters' => array())),
+    kiyoh_http(200, array('reviews' => array())),
+));
+$fallback_manager = new Kiyoh_Rating_Manager();
+$fallback_manager->queue_full_sync();
+$fallback_status = $fallback_manager->process_job_chunk();
+expect_same('completed', $fallback_status['status'], 'a non-auth location-wide review error does not stop a full sync');
 
 if ($failures > 0) {
     fwrite(STDERR, "{$failures} failed\n");

@@ -3,6 +3,7 @@
 ## v1.4.6
 
 ### Fixed
+- **Product review sync (KP-167, rc7):** “Sync Ratings Now” clears stale queued/running jobs that blocked a new full sync, sends `tenantId` on product-review publication calls, and continues through the product catalogue when the location-wide review fetch fails for a non-auth reason. Rating-sync AJAX and admin JS show JSON errors at HTTP 200 instead of a generic failure.
 - **Product review sync (KP-167, rc6):** Location-wide `/v1/publication/product/review/external` calls send only `locationId` and optional `updatedSince`—no `start` or `limit` without `productCode`/`clusterId` (both trigger `INVALID_PRODUCT_REVIEW_REQUEST` or HTTP 500 from the publication API). Responses that return a bare JSON review list are wrapped before import. Rating-sync admin AJAX returns JSON errors instead of a WordPress HTTP 500 when the sync throws.
 - **Product review sync (KP-167):** Saving a new API key or Location ID clears a stale failed rating-sync notice.
 - **Shop reviews (KP-174):** Star display rounds the 1–10 score to the nearest half star (e.g. 7.6/10 shows four stars). Review text is read from Publication API `reviewContent` (oneliner/opinion). Gutenberg block registers with title, category, and keywords so it appears in the inserter.

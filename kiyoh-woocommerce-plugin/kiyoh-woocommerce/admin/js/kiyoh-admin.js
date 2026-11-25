@@ -376,7 +376,7 @@
                 success: function (response) {
                     var sync = (response.data && response.data.sync) ? response.data.sync : {};
                     if (response.success) {
-                        KiyohAdmin.renderRatingSyncStatus(sync);
+                        KiyohAdmin.renderRatingSyncStatus(sync, response.data || {});
                         if (sync.active) {
                             KiyohAdmin.startRatingSyncPolling();
                         }
@@ -386,9 +386,16 @@
                         KiyohAdmin.showRatingSyncResult('error', errData.message || kiyoh_admin_ajax.strings.error);
                     }
                 },
-                error: function () {
-                    KiyohAdmin.setRatingSyncButtonState(false);
-                    KiyohAdmin.showRatingSyncResult('error', kiyoh_admin_ajax.strings.error);
+                error: function (xhr) {
+                    var payload = xhr.responseJSON || {};
+                    var data = payload.data || {};
+                    var message = data.message || payload.message || kiyoh_admin_ajax.strings.error;
+                    if (data.sync) {
+                        KiyohAdmin.renderRatingSyncStatus(data.sync);
+                    } else {
+                        KiyohAdmin.setRatingSyncButtonState(false);
+                    }
+                    KiyohAdmin.showRatingSyncResult('error', message);
                 }
             });
         },
@@ -446,8 +453,9 @@
             });
         },
 
-        renderRatingSyncStatus: function (sync) {
+        renderRatingSyncStatus: function (sync, extras) {
             sync = sync || {};
+            extras = extras || {};
 
             KiyohAdmin.ratingSyncActive = !!sync.active;
 
@@ -474,8 +482,9 @@
             KiyohAdmin.hideRatingSyncProgress();
             KiyohAdmin.setRatingSyncButtonState(false);
 
-            if (sync.status === 'completed' && sync.message) {
-                KiyohAdmin.showRatingSyncResult('success', sync.message);
+            if (sync.status === 'completed') {
+                var doneText = sync.message || extras.message || 'Rating sync completed.';
+                KiyohAdmin.showRatingSyncResult('success', doneText);
             } else if (sync.status === 'failed' && (sync.error || sync.message)) {
                 KiyohAdmin.showRatingSyncResult('error', sync.error || sync.message);
             }
